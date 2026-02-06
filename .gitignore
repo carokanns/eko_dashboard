@@ -1,0 +1,26 @@
+# Node
+frontend/node_modules
+frontend/.next
+frontend/.turbo
+frontend/out
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+
+# Python
+backend/.venv
+backend/__pycache__/
+backend/*.pyc
+backend/.pytest_cache/
+
+# Env/config
+.env
+.env.*
+
+# OS
+.DS_Store
+
+# Editors
+.vscode
+.idea
