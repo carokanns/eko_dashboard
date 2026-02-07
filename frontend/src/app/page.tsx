@@ -72,16 +72,16 @@ export default function Home() {
         </div>
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {kpis.map((kpi) => (
-            <article key={kpi.name} className="card-surface p-5">
+            <article key={kpi.name} className="card-surface commodity-card p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-semibold">{kpi.name}</div>
-                  <div className="text-xs text-[#6b625a]">{kpi.unit}</div>
+                  <div className="text-xs kpi-subtle">{kpi.unit}</div>
                 </div>
                 <span className="badge">{kpi.name.slice(0, 2)}</span>
               </div>
               <div className="mt-6 kpi-value">{kpi.value}</div>
-              <div className="mt-2 text-sm text-[#2f6f6a]">{kpi.change}</div>
+              <div className="mt-2 text-sm kpi-change">{kpi.change}</div>
               <div className="mt-4 h-12 rounded-xl bg-[linear-gradient(90deg,#1b2a41,transparent)] opacity-20" />
             </article>
           ))}

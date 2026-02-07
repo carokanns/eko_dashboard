@@ -48,6 +48,26 @@ body {
   box-shadow: 0 16px 40px rgba(18, 16, 15, 0.08);
 }
 
+.commodity-card {
+  background: linear-gradient(140deg, #1b2a41 0%, #243a5a 55%, #1b2a41 100%);
+  border-color: #1b2a41;
+  color: #f5f1ea;
+}
+
+.commodity-card .badge {
+  background: rgba(245, 241, 234, 0.18);
+  border-color: rgba(245, 241, 234, 0.35);
+  color: #f5f1ea;
+}
+
+.commodity-card .kpi-subtle {
+  color: rgba(245, 241, 234, 0.7);
+}
+
+.commodity-card .kpi-change {
+  color: rgba(245, 241, 234, 0.82);
+}
+
 .section-title {
   font-family: var(--font-serif), "Times New Roman", serif;
   letter-spacing: 0.4px;
@@ -74,6 +94,10 @@ body {
   font-size: 13px;
   letter-spacing: 0.4px;
   text-transform: uppercase;
+}
+
+.kpi-change {
+  color: #2f6f6a;
 }
 
 .table-shell {
