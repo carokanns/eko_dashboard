@@ -1,21 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-printf '== Backend tests ==\n'
+printf "Running backend tests...\n"
 (
-  cd "$repo_root/backend"
+  cd "$ROOT_DIR/backend"
   if [[ -x .venv/bin/python ]]; then
-    PY=.venv/bin/python
+    .venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt
+    .venv/bin/python -m pytest
   else
-    PY=python
+    python -m pip install -r requirements.txt -r requirements-dev.txt
+    python -m pytest
   fi
-  "$PY" -m pytest
 )
 
-printf '\n== Frontend tests ==\n'
+printf "Running frontend tests...\n"
 (
-  cd "$repo_root/frontend"
-  npm test
+  cd "$ROOT_DIR/frontend"
+  npm install
+  npm run test
 )
+
+printf "All tests completed.\n"
