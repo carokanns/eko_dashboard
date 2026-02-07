@@ -1,0 +1,131 @@
+instruments:
+  - id: brent
+    name_sv: Brentolja
+    ticker: BZ=F
+    unit_label: USD/fat
+    price_type: Spot
+    badge_symbol: Br
+    precision: 2
+    display_group: cards
+    sort_order: 1
+    module: commodities
+  - id: wti
+    name_sv: WTI-olja
+    ticker: CL=F
+    unit_label: USD/fat
+    price_type: Spot
+    badge_symbol: WTI
+    precision: 2
+    display_group: cards
+    sort_order: 2
+    module: commodities
+  - id: gold
+    name_sv: Guld
+    ticker: GC=F
+    unit_label: USD/uns
+    price_type: Spot
+    badge_symbol: Au
+    precision: 2
+    display_group: cards
+    sort_order: 3
+    module: commodities
+  - id: silver
+    name_sv: Silver
+    ticker: SI=F
+    unit_label: USD/uns
+    price_type: Spot
+    badge_symbol: Ag
+    precision: 2
+    display_group: cards
+    sort_order: 4
+    module: commodities
+  - id: copper
+    name_sv: Koppar
+    ticker: HG=F
+    unit_label: USD/pund
+    price_type: 3M termin
+    badge_symbol: Cu
+    precision: 3
+    display_group: cards
+    sort_order: 5
+    module: commodities
+  - id: zinc
+    name_sv: Zink
+    ticker: ZN=F
+    unit_label: USD/ton
+    price_type: 3M termin
+    badge_symbol: Zn
+    precision: 2
+    display_group: cards
+    sort_order: 6
+    module: commodities
+  - id: aapl
+    name_sv: Apple
+    ticker: AAPL
+    unit_label: USD
+    price_type: Aktie
+    badge_symbol: AAPL
+    precision: 2
+    display_group: table
+    sort_order: 1
+    module: mag7
+  - id: msft
+    name_sv: Microsoft
+    ticker: MSFT
+    unit_label: USD
+    price_type: Aktie
+    badge_symbol: MSFT
+    precision: 2
+    display_group: table
+    sort_order: 2
+    module: mag7
+  - id: googl
+    name_sv: Alphabet
+    ticker: GOOGL
+    unit_label: USD
+    price_type: Aktie
+    badge_symbol: GOOGL
+    precision: 2
+    display_group: table
+    sort_order: 3
+    module: mag7
+  - id: amzn
+    name_sv: Amazon
+    ticker: AMZN
+    unit_label: USD
+    price_type: Aktie
+    badge_symbol: AMZN
+    precision: 2
+    display_group: table
+    sort_order: 4
+    module: mag7
+  - id: nvda
+    name_sv: Nvidia
+    ticker: NVDA
+    unit_label: USD
+    price_type: Aktie
+    badge_symbol: NVDA
+    precision: 2
+    display_group: table
+    sort_order: 5
+    module: mag7
+  - id: meta
+    name_sv: Meta
+    ticker: META
+    unit_label: USD
+    price_type: Aktie
+    badge_symbol: META
+    precision: 2
+    display_group: table
+    sort_order: 6
+    module: mag7
+  - id: tsla
+    name_sv: Tesla
+    ticker: TSLA
+    unit_label: USD
+    price_type: Aktie
+    badge_symbol: TSLA
+    precision: 2
+    display_group: table
+    sort_order: 7
+    module: mag7

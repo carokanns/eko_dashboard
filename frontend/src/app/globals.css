@@ -1,26 +1,121 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f4f2ed;
+  --foreground: #12100f;
+  --surface: #ffffff;
+  --surface-muted: #f1ede6;
+  --accent: #f28f3b;
+  --accent-2: #2f6f6a;
+  --accent-3: #1b2a41;
+  --border: #ded6cc;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
 }
 
 body {
-  background: var(--background);
+  background: radial-gradient(1200px 800px at 15% -10%, #fff2df 0%, transparent 60%),
+    radial-gradient(1000px 700px at 90% 0%, #e0f0ea 0%, transparent 55%),
+    linear-gradient(180deg, #f7f4ef 0%, #efe8dc 55%, #f5f1ea 100%);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(242, 143, 59, 0.25);
+}
+
+.container-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+}
+
+.card-surface {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: 0 16px 40px rgba(18, 16, 15, 0.08);
+}
+
+.section-title {
+  font-family: var(--font-serif), "Times New Roman", serif;
+  letter-spacing: 0.4px;
+}
+
+.badge {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  background: #fff7ec;
+}
+
+.kpi-value {
+  font-family: var(--font-serif), "Times New Roman", serif;
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.kpi-subtle {
+  color: #6b625a;
+  font-size: 13px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.table-shell {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.table-head {
+  background: #f6f1e9;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab-pill {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  background: transparent;
+}
+
+.tab-pill[data-active="true"] {
+  background: #1b2a41;
+  color: #f5f1ea;
+  border-color: #1b2a41;
+}
+
+.tab-pill[data-active="false"] {
+  border-color: var(--border);
+  color: #2f2720;
+}
+
+@media (max-width: 768px) {
+  .container-shell {
+    padding: 24px 16px 60px;
+  }
+
+  .kpi-value {
+    font-size: 26px;
+  }
 }
