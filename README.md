@@ -12,3 +12,7 @@ Nästa steg:
 3. Fyll `config/instruments.example.yaml`
 4. Lägg till `docker-compose.yml`
 
+Test:
+- Samlad: `./scripts/test-all.sh`
+- Backend: `cd backend && .venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt && .venv/bin/python -m pytest`
+- Frontend: `cd frontend && npm install && npm run test`
