@@ -6,11 +6,25 @@ Struktur:
 - `config/` instrument-konfiguration (YAML/JSON)
 - `docker-compose.yml` lokal orkestrering
 
-Nästa steg:
-1. Skapa frontend (Next.js App Router + Tailwind)
-2. Skapa backend (FastAPI + provider-lager + cache)
-3. Fyll `config/instruments.example.yaml`
-4. Lägg till `docker-compose.yml`
+Status:
+1. Frontend och backend är kopplade end-to-end.
+2. Marknadsdata hämtas från Yahoo Finance via `yfinance`.
+3. In-memory cache används med TTL 60 sekunder.
+4. Partial responses stöds: enskilda instrument kan vara stale utan att hela endpointen faller.
+
+API:
+- `GET /api/health`
+- `GET /api/commodities/summary`
+- `GET /api/mag7/summary`
+- `GET /api/commodities/series?id=<id>&range=1m|3m|1y`
+
+Summary-svar:
+- `{ "items": [...], "meta": { "source": "yahoo_finance", "cached": boolean, "fetched_at": iso-datetime } }`
+
+Begränsningar (v1):
+- Ingen persistent cache eller databas.
+- Ingen auth/rate-limiting.
+- Datakällan är Yahoo Finance och kan ge luckor/temporära fel.
 
 Test:
 - Samlad: `./scripts/test-all.sh`
