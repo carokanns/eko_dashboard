@@ -18,6 +18,11 @@ backend/.pytest_cache/
 .env
 .env.*
 
+# Runtime
+.run/
+backend/.run/
+frontend/.run/
+
 # OS
 .DS_Store
 

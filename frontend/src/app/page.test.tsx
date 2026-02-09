@@ -120,3 +120,49 @@ test("sorts Mag7 by YTD when toggle is clicked", () => {
   mag7Rows = screen.getAllByTestId(/^mag7-row-/);
   expect(mag7Rows[0]).toHaveAttribute("data-testid", "mag7-row-aapl");
 });
+
+test("shows top 6 Mag7 companies in KPI cards when Mag 7 tab is selected", () => {
+  const mag7 = {
+    ...summary,
+    items: [
+      { ...summary.items[0], id: "aapl", name: "Apple" },
+      { ...summary.items[0], id: "msft", name: "Microsoft" },
+      { ...summary.items[0], id: "googl", name: "Alphabet" },
+      { ...summary.items[0], id: "amzn", name: "Amazon" },
+      { ...summary.items[0], id: "nvda", name: "Nvidia" },
+      { ...summary.items[0], id: "meta", name: "Meta" },
+      { ...summary.items[0], id: "tsla", name: "Tesla" },
+    ],
+  };
+
+  render(<DashboardView commodities={summary} mag7={mag7} warnings={[]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Mag 7" }));
+
+  expect(screen.getByTestId("kpi-card-msft")).toBeInTheDocument();
+  expect(screen.getByTestId("kpi-card-nvda")).toBeInTheDocument();
+  expect(screen.getByTestId("kpi-card-aapl")).toBeInTheDocument();
+  expect(screen.getByTestId("kpi-card-amzn")).toBeInTheDocument();
+  expect(screen.getByTestId("kpi-card-googl")).toBeInTheDocument();
+  expect(screen.getByTestId("kpi-card-meta")).toBeInTheDocument();
+  expect(screen.queryByTestId("kpi-card-tsla")).not.toBeInTheDocument();
+});
+
+test("switches table content to Mag7 when Mag 7 tab is selected", () => {
+  const commodities = {
+    ...summary,
+    items: [{ ...summary.items[0], id: "brent", name: "Brentolja" }],
+  };
+  const mag7 = {
+    ...summary,
+    items: [{ ...summary.items[0], id: "aapl", name: "Apple" }],
+  };
+
+  render(<DashboardView commodities={commodities} mag7={mag7} warnings={[]} />);
+  expect(screen.getByTestId("table-row-brent")).toBeInTheDocument();
+  expect(screen.queryByTestId("table-row-aapl")).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Mag 7" }));
+  expect(screen.getByText("MAG 7")).toBeInTheDocument();
+  expect(screen.getByTestId("table-row-aapl")).toBeInTheDocument();
+  expect(screen.queryByTestId("table-row-brent")).not.toBeInTheDocument();
+});

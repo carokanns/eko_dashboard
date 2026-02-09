@@ -69,6 +69,26 @@ function sortMag7ByYtd(items: SummaryItem[], direction: "asc" | "desc"): Summary
   return sorted;
 }
 
+function topMag7Cards(items: SummaryItem[]): SummaryItem[] {
+  const rank: Record<string, number> = {
+    msft: 1,
+    nvda: 2,
+    aapl: 3,
+    amzn: 4,
+    googl: 5,
+    meta: 6,
+    tsla: 7,
+  };
+
+  return [...items]
+    .sort((a, b) => {
+      const ra = rank[a.id] ?? Number.MAX_SAFE_INTEGER;
+      const rb = rank[b.id] ?? Number.MAX_SAFE_INTEGER;
+      return ra - rb;
+    })
+    .slice(0, 6);
+}
+
 export function DashboardView({ commodities, mag7, warnings }: DashboardViewProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]["id"]>("commodities");
@@ -104,6 +124,15 @@ export function DashboardView({ commodities, mag7, warnings }: DashboardViewProp
     mag7Items.filter((item) => matchesSearch(item, searchQuery)),
     mag7SortDirection,
   );
+  const kpiItems = activeTab === "mag7" ? topMag7Cards(filteredMag7Items) : filteredCommodityItems;
+  const kpiTitle = activeTab === "mag7" ? "Mag 7" : "Ravaror";
+  const kpiEmptyText =
+    activeTab === "mag7" ? "Ingen Mag 7-data tillganglig." : "Ingen ravarudata tillganglig.";
+  const tableItems = activeTab === "mag7" ? filteredMag7Items : filteredCommodityItems;
+  const tableLabel = activeTab === "mag7" ? "MAG 7" : "RAVAROR";
+  const tableFirstColumn = activeTab === "mag7" ? "Bolag" : "Ravara";
+  const tableEmptyText =
+    activeTab === "mag7" ? "Data kunde inte laddas for Mag 7." : "Data kunde inte laddas for ravaror.";
 
   return (
     <main className="container-shell">
@@ -179,12 +208,12 @@ export function DashboardView({ commodities, mag7, warnings }: DashboardViewProp
 
       <section className="mt-8">
         <div className="flex items-center justify-between">
-          <h2 className="section-title text-2xl">Ravaror</h2>
+          <h2 className="section-title text-2xl">{kpiTitle}</h2>
           <span className="kpi-subtle">KPI-kort</span>
         </div>
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredCommodityItems.map((item) => (
-            <article key={item.id} className="card-surface commodity-card p-5">
+          {kpiItems.map((item) => (
+            <article key={item.id} data-testid={`kpi-card-${item.id}`} className="card-surface commodity-card p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-semibold">{item.name}</div>
@@ -197,8 +226,8 @@ export function DashboardView({ commodities, mag7, warnings }: DashboardViewProp
               <div className="mt-4 h-12 rounded-xl bg-[linear-gradient(90deg,#1b2a41,transparent)] opacity-20" />
             </article>
           ))}
-          {filteredCommodityItems.length === 0 ? (
-            <div className="card-surface p-5 text-sm text-[#6b625a]">Ingen ravarudata tillganglig.</div>
+          {kpiItems.length === 0 ? (
+            <div className="card-surface p-5 text-sm text-[#6b625a]">{kpiEmptyText}</div>
           ) : null}
         </div>
       </section>
@@ -206,11 +235,11 @@ export function DashboardView({ commodities, mag7, warnings }: DashboardViewProp
       <section className="mt-10">
         <div className="flex items-center justify-between">
           <h2 className="section-title text-2xl">Tabell</h2>
-          <span className="kpi-subtle">RAVAROR</span>
+          <span className="kpi-subtle">{tableLabel}</span>
         </div>
         <div className="mt-4 table-shell">
           <div className="table-head grid grid-cols-7 gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#534a42]">
-            <div>Ravara</div>
+            <div>{tableFirstColumn}</div>
             <div>Senast</div>
             <div>+/-</div>
             <div>1V</div>
@@ -218,9 +247,13 @@ export function DashboardView({ commodities, mag7, warnings }: DashboardViewProp
             <div>1 ar</div>
             <div>Pristyp</div>
           </div>
-          {filteredCommodityItems.length > 0 ? (
-            filteredCommodityItems.map((item) => (
-              <div key={`table-${item.id}`} className="grid grid-cols-7 gap-2 border-t border-[var(--border)] px-4 py-3 text-sm">
+          {tableItems.length > 0 ? (
+            tableItems.map((item) => (
+              <div
+                key={`table-${item.id}`}
+                data-testid={`table-row-${item.id}`}
+                className="grid grid-cols-7 gap-2 border-t border-[var(--border)] px-4 py-3 text-sm"
+              >
                 <div>{item.name}</div>
                 <div>{formatValue(item.last)}</div>
                 <div>{formatPercent(item.day_pct)}</div>
@@ -231,7 +264,7 @@ export function DashboardView({ commodities, mag7, warnings }: DashboardViewProp
               </div>
             ))
           ) : (
-            <div className="px-4 py-6 text-sm text-[#6b625a]">Data kunde inte laddas for ravaror.</div>
+            <div className="px-4 py-6 text-sm text-[#6b625a]">{tableEmptyText}</div>
           )}
         </div>
       </section>
