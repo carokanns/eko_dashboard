@@ -129,3 +129,23 @@ instruments:
     display_group: table
     sort_order: 7
     module: mag7
+  - id: tip
+    name_sv: USA TIPS ETF
+    ticker: TIP
+    unit_label: USD
+    price_type: ETF
+    badge_symbol: TIP
+    precision: 2
+    display_group: cards
+    sort_order: 1
+    module: inflation
+  - id: vtip
+    name_sv: USA Kort TIPS ETF
+    ticker: VTIP
+    unit_label: USD
+    price_type: ETF
+    badge_symbol: VTIP
+    precision: 2
+    display_group: cards
+    sort_order: 2
+    module: inflation

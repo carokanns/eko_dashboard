@@ -1,7 +1,9 @@
 # Projektstatus 1
 
 ## Projektöversikt
+
 `Ekonomi_dashboard` är en monorepo med:
+
 - `backend/` (FastAPI)
 - `frontend/` (Next.js)
 - `config/` (instrumentlista i YAML)
@@ -10,6 +12,7 @@
 Syftet är en finansiell dashboard som visar råvaror och Mag7 med data från Yahoo Finance.
 
 ## Vad projektet gör idag
+
 - Hämtar live marknadsdata via `yfinance`.
 - Exponerar API:
   - `/api/health`
@@ -26,6 +29,7 @@ Syftet är en finansiell dashboard som visar råvaror och Mag7 med data från Ya
   - statusvisning (Fresh/Partial/Stale/Offline)
 
 ## Utvecklat så här långt
+
 - End-to-end-koppling mellan frontend och backend.
 - Riktig dataprovider + beräkningslogik för nyckeltal.
 - Tester utbyggda:
@@ -39,6 +43,7 @@ Syftet är en finansiell dashboard som visar råvaror och Mag7 med data från Ya
 - README uppdaterad med drift- och åtkomstflöde (LAN + Tailscale).
 
 ## Vad som återstår
+
 - Funktionellt innehåll för flikarna `Inflation` och `Grafer` (nu mest UI-placeholder).
 - Persistent cache/databas (idag endast in-memory).
 - Auth/rate-limiting om appen ska delas bredare.
@@ -46,4 +51,5 @@ Syftet är en finansiell dashboard som visar råvaror och Mag7 med data från Ya
 - Eventuell städning av frontend-audit-varningar i dev/test dependencies (`npm audit`).
 
 ## Mognadsgrad just nu
+
 Du har en fungerande v1-MVP som går att använda på laptop, mobil och tablet (LAN/Tailscale), med bra testtäckning för kärnflödet.
