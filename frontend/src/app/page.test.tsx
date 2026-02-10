@@ -237,6 +237,30 @@ test("switches table content to Mag7 when Mag 7 tab is selected", () => {
   expect(screen.queryByTestId("table-row-brent")).not.toBeInTheDocument();
 });
 
+test("clicking KPI card updates selected market chart panel", () => {
+  const commodities = {
+    ...summary,
+    items: [
+      { ...summary.items[0], id: "brent", name: "Brentolja" },
+      { ...summary.items[0], id: "gold", name: "Guld" },
+    ],
+  };
+
+  render(
+    <DashboardView
+      commodities={commodities}
+      mag7={summary}
+      inflation={summary}
+      inflationSeriesByRange={inflationSeriesByRange}
+      warnings={[]}
+    />,
+  );
+
+  expect(screen.getByTestId("selected-market-chart-panel")).toBeInTheDocument();
+  fireEvent.click(screen.getByTestId("kpi-card-gold"));
+  expect(screen.getByRole("heading", { name: "Guld" })).toBeInTheDocument();
+});
+
 
 test("renders shared inflation graph and allows range switch", () => {
   const inflation = {
@@ -281,29 +305,4 @@ test("renders shared inflation graph and allows range switch", () => {
   expect(screen.getByRole("button", { name: "6 man" })).toHaveAttribute("data-active", "true");
   fireEvent.click(screen.getByRole("button", { name: "12 man" }));
   expect(screen.getByRole("button", { name: "12 man" })).toHaveAttribute("data-active", "true");
-});
-
-test("charts tab switches selected graph panel", () => {
-  const inflation = {
-    ...summary,
-    items: [
-      { ...summary.items[0], id: "inflation_se", name: "Sverige KPI" },
-      { ...summary.items[0], id: "inflation_us", name: "USA KPI" },
-    ],
-  };
-
-  render(
-    <DashboardView
-      commodities={summary}
-      mag7={summary}
-      inflation={inflation}
-      inflationSeriesByRange={inflationSeriesByRange}
-      warnings={[]}
-    />,
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Grafer" }));
-
-  expect(screen.getByTestId("selected-chart-panel")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "USA" }));
-  expect(screen.getByText("USA inflation")).toBeInTheDocument();
 });

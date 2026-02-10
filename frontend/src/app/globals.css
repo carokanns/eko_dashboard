@@ -54,6 +54,11 @@ body {
   color: #f5f1ea;
 }
 
+.commodity-card[data-active="true"] {
+  outline: 2px solid #f28f3b;
+  outline-offset: 2px;
+}
+
 .commodity-card .badge {
   background: rgba(245, 241, 234, 0.18);
   border-color: rgba(245, 241, 234, 0.35);

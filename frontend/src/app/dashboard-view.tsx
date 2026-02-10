@@ -9,7 +9,6 @@ const tabs = [
   { id: "commodities", label: "Råvaror" },
   { id: "mag7", label: "Mag 7" },
   { id: "inflation", label: "Inflation" },
-  { id: "charts", label: "Grafer" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -176,7 +175,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
   const [activeTab, setActiveTab] = useState<TabId>("commodities");
   const [searchQuery, setSearchQuery] = useState("");
   const [mag7SortDirection, setMag7SortDirection] = useState<"asc" | "desc">("desc");
-  const [selectedChartId, setSelectedChartId] = useState<string | null>(null);
+  const [selectedMarketChartId, setSelectedMarketChartId] = useState<string | null>(null);
   const [inflationRange, setInflationRange] = useState<InflationRange>("3m");
 
   useEffect(() => {
@@ -219,7 +218,6 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
     mag7SortDirection,
   );
 
-  const filteredInflationItems = inflationItems.filter((item) => matchesSearch(item, searchQuery));
   const swedenInflationItem = inflationItems.find((item) => item.id.includes("se")) ?? null;
   const usaInflationItem = inflationItems.find((item) => item.id.includes("us")) ?? null;
   const selectedRangeSeries = inflationSeriesByRange[inflationRange];
@@ -228,12 +226,8 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
     : [];
   const usaInflationPoints = usaInflationItem ? selectedRangeSeries[usaInflationItem.id] ?? usaInflationItem.sparkline : [];
 
-  const selectedChart =
-    filteredInflationItems.find((item) => item.id === selectedChartId) ?? filteredInflationItems[0] ?? null;
-
   const showMarketSections = activeTab === "commodities" || activeTab === "mag7";
   const showInflation = activeTab === "inflation";
-  const showCharts = activeTab === "charts";
 
   const kpiItems = activeTab === "mag7" ? topMag7Cards(filteredMag7Items) : filteredCommodityItems;
   const kpiTitle = activeTab === "mag7" ? "Mag 7" : "Ravaror";
@@ -244,6 +238,18 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
   const tableFirstColumn = activeTab === "mag7" ? "Bolag" : "Ravara";
   const tableEmptyText =
     activeTab === "mag7" ? "Data kunde inte laddas for Mag 7." : "Data kunde inte laddas for ravaror.";
+  const selectedMarketChart = kpiItems.find((item) => item.id === selectedMarketChartId) ?? kpiItems[0] ?? null;
+
+  useEffect(() => {
+    if (kpiItems.length === 0) {
+      setSelectedMarketChartId(null);
+      return;
+    }
+    setSelectedMarketChartId((current) => {
+      if (current && kpiItems.some((item) => item.id === current)) return current;
+      return kpiItems[0].id;
+    });
+  }, [activeTab, kpiItems]);
 
   return (
     <main className="container-shell">
@@ -268,7 +274,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
           <div className="flex-1">
             <input
               className="w-full rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm"
-              placeholder={`Sok i ${activeTab === "mag7" ? "Mag 7" : activeTab === "inflation" || activeTab === "charts" ? "inflation" : "ravaror"}`}
+              placeholder={`Sok i ${activeTab === "mag7" ? "Mag 7" : activeTab === "inflation" ? "inflation" : "ravaror"}`}
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
             />
@@ -330,7 +336,14 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
             </div>
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {kpiItems.map((item) => (
-                <article key={item.id} data-testid={`kpi-card-${item.id}`} className="card-surface commodity-card p-5">
+                <button
+                  key={item.id}
+                  type="button"
+                  data-testid={`kpi-card-${item.id}`}
+                  className="card-surface commodity-card p-5 text-left transition-transform hover:-translate-y-0.5"
+                  data-active={selectedMarketChart?.id === item.id}
+                  onClick={() => setSelectedMarketChartId(item.id)}
+                >
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-sm font-semibold">{item.name}</div>
@@ -341,12 +354,38 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
                   <div className="mt-6 kpi-value">{formatValue(item.last)}</div>
                   <div className="mt-2 text-sm kpi-change">{formatPercent(item.day_pct)}</div>
                   <Sparkline points={item.sparkline} />
-                </article>
+                </button>
               ))}
               {kpiItems.length === 0 ? (
                 <div className="card-surface p-5 text-sm text-[#6b625a]">{kpiEmptyText}</div>
               ) : null}
             </div>
+          </section>
+
+          <section className="mt-8">
+            <div className="flex items-center justify-between">
+              <h2 className="section-title text-2xl">Vald graf</h2>
+              <span className="kpi-subtle">Klicka pa en ruta for att byta</span>
+            </div>
+            {selectedMarketChart ? (
+              <article className="card-surface mt-4 p-6" data-testid="selected-market-chart-panel">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">{selectedMarketChart.name}</h3>
+                    <p className="text-xs text-[#6b625a]">
+                      {selectedMarketChart.unit ?? "--"} • {selectedMarketChart.price_type ?? "--"}
+                    </p>
+                  </div>
+                  <span className="badge">{selectedMarketChart.is_stale ? "Stale" : "Live"}</span>
+                </div>
+                <div className="mt-4 text-sm text-[#6b625a]">
+                  Senast: {formatValue(selectedMarketChart.last)} ({formatPercent(selectedMarketChart.day_pct)})
+                </div>
+                <Sparkline points={selectedMarketChart.sparkline} />
+              </article>
+            ) : (
+              <div className="card-surface mt-4 p-5 text-sm text-[#6b625a]">Ingen grafdata tillgänglig.</div>
+            )}
           </section>
 
           <section className="mt-10">
@@ -427,42 +466,6 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
             </article>
           ) : (
             <div className="card-surface mt-4 p-5 text-sm text-[#6b625a]">Ingen inflationsdata tillgänglig.</div>
-          )}
-        </section>
-      ) : null}
-
-      {showCharts ? (
-        <section className="mt-8">
-          <div className="flex items-center justify-between">
-            <h2 className="section-title text-2xl">Grafer</h2>
-            <span className="kpi-subtle">Välj graf i rutorna</span>
-          </div>
-          <div className="mt-5 flex flex-wrap gap-2">
-            {filteredInflationItems.map((item) => (
-              <button
-                key={`chart-selector-${item.id}`}
-                className="tab-pill"
-                data-active={selectedChart?.id === item.id}
-                onClick={() => setSelectedChartId(item.id)}
-              >
-                {inflationRole(item)}
-              </button>
-            ))}
-          </div>
-          {selectedChart ? (
-            <article className="card-surface mt-4 p-6" data-testid="selected-chart-panel">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">{inflationRole(selectedChart)} inflation</h3>
-                  <p className="text-xs text-[#6b625a]">{selectedChart.name}</p>
-                </div>
-                <span className="badge">{selectedChart.is_stale ? "Stale" : "Live"}</span>
-              </div>
-              <div className="mt-4 text-sm text-[#6b625a]">Senast: {formatValue(selectedChart.last)} ({formatPercent(selectedChart.day_pct)})</div>
-              <Sparkline points={selectedChart.sparkline} />
-            </article>
-          ) : (
-            <div className="card-surface mt-4 p-5 text-sm text-[#6b625a]">Ingen grafdata tillgänglig.</div>
           )}
         </section>
       ) : null}

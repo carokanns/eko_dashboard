@@ -22,9 +22,8 @@ API:
 - `GET /api/commodities/summary`
 - `GET /api/mag7/summary`
 - `GET /api/inflation/summary`
-- `GET /api/inflation/series?id=<id>&range=1m|3m|1y`
+- `GET /api/inflation/series?id=<id>&range=1m|3m|6m|1y`
 - `GET /api/commodities/series?id=<id>&range=1m|3m|1y`
-- `GET /api/charts/series?id=<id>&range=1m|3m|1y`
 
 Summary-svar:
 

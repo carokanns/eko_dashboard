@@ -213,33 +213,3 @@ def test_inflation_series_supports_6m_range(client: TestClient, monkeypatch):
     assert cached.json()["meta"]["cached"] is True
     assert calls["count"] == 1
 
-
-def test_charts_series_validates_range_and_uses_cache(client: TestClient, monkeypatch):
-    now = datetime.now(timezone.utc)
-    calls = {"count": 0}
-
-    def fake_series(_instrument, _range):
-        calls["count"] += 1
-        return [SparkPoint(t=now - timedelta(days=1), v=101.0), SparkPoint(t=now, v=102.0)]
-
-    monkeypatch.setattr("app.routes.charts.fetch_series_for_instrument", fake_series)
-
-    response = client.get("/api/charts/series", params={"id": "brent", "range": "1m"})
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["range"] == "1m"
-    assert len(payload["points"]) == 2
-    assert payload["meta"]["cached"] is False
-
-    cached = client.get("/api/charts/series", params={"id": "brent", "range": "1m"})
-    assert cached.status_code == 200
-    assert cached.json()["meta"]["cached"] is True
-    assert calls["count"] == 1
-
-    invalid = client.get("/api/charts/series", params={"id": "brent", "range": "10y"})
-    assert invalid.status_code == 422
-
-
-def test_charts_series_unknown_id_returns_404(client: TestClient):
-    response = client.get("/api/charts/series", params={"id": "unknown-id", "range": "1m"})
-    assert response.status_code == 404
