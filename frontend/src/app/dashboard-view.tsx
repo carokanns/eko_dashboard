@@ -165,6 +165,12 @@ function inflationRole(item: SummaryItem): string {
   return item.id.includes("se") ? "Sverige" : "USA";
 }
 
+function sourceDisplayName(source: string): string {
+  if (source === "yahoo_finance") return "Yahoo";
+  if (source === "fred") return "FRED";
+  return source;
+}
+
 export function DashboardView({ commodities, mag7, inflation, inflationSeriesByRange, warnings }: DashboardViewProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>("commodities");
@@ -198,6 +204,14 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
           : "partial";
 
   const latestUpdate = commodities?.meta.fetched_at ?? mag7?.meta.fetched_at ?? inflation?.meta.fetched_at;
+  const sourceNames = Array.from(
+    new Set(
+      [commodities?.meta.source, mag7?.meta.source, inflation?.meta.source]
+        .filter((source): source is string => Boolean(source))
+        .map(sourceDisplayName),
+    ),
+  );
+  const sourceLabel = sourceNames.length > 0 ? sourceNames.join(" + ") : "--";
 
   const filteredCommodityItems = commodityItems.filter((item) => matchesSearch(item, searchQuery));
   const filteredMag7Items = sortMag7ByYtd(
@@ -238,7 +252,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
           <div className="badge w-fit">Finansiell Dashboard</div>
           <h1 className="section-title text-4xl font-semibold">Marknadsoversikt</h1>
           <p className="text-sm text-[#5a524a]">
-            Snabba KPI:er, tabeller och sparklines med Yahoo Finance (MVP).
+            Snabba KPI:er, tabeller och sparklines med flera datakällor (MVP).
           </p>
         </div>
         <div className="card-surface flex flex-col gap-4 p-4 md:flex-row md:items-center">
@@ -248,7 +262,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
             </div>
             <div>
               <div className="text-sm font-semibold">Ekonomi Dashboard</div>
-              <div className="text-xs text-[#6b625a]">Datakalla: Yahoo</div>
+              <div className="text-xs text-[#6b625a]">Datakallor: {sourceLabel}</div>
             </div>
           </div>
           <div className="flex-1">
