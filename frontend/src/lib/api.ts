@@ -55,6 +55,10 @@ export function fetchMag7Summary(): Promise<SummaryResponse> {
   return fetchJson<SummaryResponse>("/api/mag7/summary");
 }
 
+export function fetchInflationSummary(): Promise<SummaryResponse> {
+  return fetchJson<SummaryResponse>("/api/inflation/summary");
+}
+
 export function fetchCommoditySeries(id: string, range: "1m" | "3m" | "1y" = "1m"): Promise<SeriesResponse> {
   const query = new URLSearchParams({ id, range });
   return fetchJson<SeriesResponse>(`/api/commodities/series?${query.toString()}`);

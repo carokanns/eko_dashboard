@@ -12,13 +12,18 @@ const tabs = [
   { id: "charts", label: "Grafer" },
 ] as const;
 
+type TabId = (typeof tabs)[number]["id"];
+
 type DashboardViewProps = {
   commodities: SummaryResponse | null;
   mag7: SummaryResponse | null;
+  inflation: SummaryResponse | null;
   warnings: string[];
 };
 
 type ModuleStatus = "fresh" | "partial" | "stale" | "offline";
+
+const EMPTY_ITEMS: SummaryItem[] = [];
 
 function formatValue(value: number | null, precision = 2): string {
   if (value === null) return "--";
@@ -89,11 +94,40 @@ function topMag7Cards(items: SummaryItem[]): SummaryItem[] {
     .slice(0, 6);
 }
 
-export function DashboardView({ commodities, mag7, warnings }: DashboardViewProps) {
+function Sparkline({ points }: { points: { t: string; v: number }[] }) {
+  if (points.length < 2) {
+    return <div className="mt-4 h-20 rounded-xl bg-[linear-gradient(90deg,#1b2a41,transparent)] opacity-20" />;
+  }
+
+  const values = points.map((p) => p.v);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const path = points
+    .map((point, index) => {
+      const x = (index / (points.length - 1)) * 100;
+      const y = 100 - ((point.v - min) / range) * 100;
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return (
+    <svg className="mt-4 h-20 w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <polyline fill="none" stroke="#1b2a41" strokeWidth="2" points={path} />
+    </svg>
+  );
+}
+
+function inflationRole(item: SummaryItem): string {
+  return item.id.includes("se") ? "Sverige" : "USA";
+}
+
+export function DashboardView({ commodities, mag7, inflation, warnings }: DashboardViewProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]["id"]>("commodities");
+  const [activeTab, setActiveTab] = useState<TabId>("commodities");
   const [searchQuery, setSearchQuery] = useState("");
   const [mag7SortDirection, setMag7SortDirection] = useState<"asc" | "desc">("desc");
+  const [selectedChartId, setSelectedChartId] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -102,28 +136,40 @@ export function DashboardView({ commodities, mag7, warnings }: DashboardViewProp
     return () => clearInterval(timer);
   }, [router]);
 
-  const commodityItems = commodities?.items ?? [];
-  const mag7Items = mag7?.items ?? [];
+  const commodityItems = commodities?.items ?? EMPTY_ITEMS;
+  const mag7Items = mag7?.items ?? EMPTY_ITEMS;
+  const inflationItems = inflation?.items ?? EMPTY_ITEMS;
 
   const commodityStatus = getModuleStatus(commodityItems);
   const mag7Status = getModuleStatus(mag7Items);
+  const inflationStatus = getModuleStatus(inflationItems);
   const dashboardStatus: ModuleStatus = warnings.length > 0
     ? "partial"
-    : commodityStatus === "offline" && mag7Status === "offline"
+    : [commodityStatus, mag7Status, inflationStatus].every((status) => status === "offline")
       ? "offline"
-      : commodityStatus === "fresh" && mag7Status === "fresh"
+      : [commodityStatus, mag7Status, inflationStatus].every((status) => status === "fresh")
         ? "fresh"
-        : commodityStatus === "stale" && mag7Status === "stale"
+        : [commodityStatus, mag7Status, inflationStatus].every((status) => status === "stale")
           ? "stale"
           : "partial";
 
-  const latestUpdate = commodities?.meta.fetched_at ?? mag7?.meta.fetched_at;
+  const latestUpdate = commodities?.meta.fetched_at ?? mag7?.meta.fetched_at ?? inflation?.meta.fetched_at;
 
   const filteredCommodityItems = commodityItems.filter((item) => matchesSearch(item, searchQuery));
   const filteredMag7Items = sortMag7ByYtd(
     mag7Items.filter((item) => matchesSearch(item, searchQuery)),
     mag7SortDirection,
   );
+
+  const filteredInflationItems = inflationItems.filter((item) => matchesSearch(item, searchQuery));
+
+  const selectedChart =
+    filteredInflationItems.find((item) => item.id === selectedChartId) ?? filteredInflationItems[0] ?? null;
+
+  const showMarketSections = activeTab === "commodities" || activeTab === "mag7";
+  const showInflation = activeTab === "inflation";
+  const showCharts = activeTab === "charts";
+
   const kpiItems = activeTab === "mag7" ? topMag7Cards(filteredMag7Items) : filteredCommodityItems;
   const kpiTitle = activeTab === "mag7" ? "Mag 7" : "Ravaror";
   const kpiEmptyText =
@@ -157,7 +203,7 @@ export function DashboardView({ commodities, mag7, warnings }: DashboardViewProp
           <div className="flex-1">
             <input
               className="w-full rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm"
-              placeholder={`Sok i ${activeTab === "mag7" ? "Mag 7" : "ravaror"}`}
+              placeholder={`Sok i ${activeTab === "mag7" ? "Mag 7" : activeTab === "inflation" || activeTab === "charts" ? "inflation" : "ravaror"}`}
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
             />
@@ -176,7 +222,7 @@ export function DashboardView({ commodities, mag7, warnings }: DashboardViewProp
         </section>
       ) : null}
 
-      <section className="mt-6 grid gap-3 md:grid-cols-3">
+      <section className="mt-6 grid gap-3 md:grid-cols-4">
         <div className="card-surface p-3 text-sm">
           <div className="kpi-subtle">Dashboard status</div>
           <div className="mt-1 font-semibold">{statusLabel(dashboardStatus)}</div>
@@ -188,6 +234,10 @@ export function DashboardView({ commodities, mag7, warnings }: DashboardViewProp
         <div className="card-surface p-3 text-sm">
           <div className="kpi-subtle">Mag 7</div>
           <div className="mt-1 font-semibold">{statusLabel(mag7Status)}</div>
+        </div>
+        <div className="card-surface p-3 text-sm">
+          <div className="kpi-subtle">Inflation</div>
+          <div className="mt-1 font-semibold">{statusLabel(inflationStatus)}</div>
         </div>
       </section>
 
@@ -206,68 +256,136 @@ export function DashboardView({ commodities, mag7, warnings }: DashboardViewProp
         </div>
       </section>
 
-      <section className="mt-8">
-        <div className="flex items-center justify-between">
-          <h2 className="section-title text-2xl">{kpiTitle}</h2>
-          <span className="kpi-subtle">KPI-kort</span>
-        </div>
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {kpiItems.map((item) => (
-            <article key={item.id} data-testid={`kpi-card-${item.id}`} className="card-surface commodity-card p-5">
+      {showMarketSections ? (
+        <>
+          <section className="mt-8">
+            <div className="flex items-center justify-between">
+              <h2 className="section-title text-2xl">{kpiTitle}</h2>
+              <span className="kpi-subtle">KPI-kort</span>
+            </div>
+            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {kpiItems.map((item) => (
+                <article key={item.id} data-testid={`kpi-card-${item.id}`} className="card-surface commodity-card p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-semibold">{item.name}</div>
+                      <div className="text-xs kpi-subtle">{item.unit ?? "--"}</div>
+                    </div>
+                    <span className="badge">{item.is_stale ? "Stale" : "Live"}</span>
+                  </div>
+                  <div className="mt-6 kpi-value">{formatValue(item.last)}</div>
+                  <div className="mt-2 text-sm kpi-change">{formatPercent(item.day_pct)}</div>
+                  <Sparkline points={item.sparkline} />
+                </article>
+              ))}
+              {kpiItems.length === 0 ? (
+                <div className="card-surface p-5 text-sm text-[#6b625a]">{kpiEmptyText}</div>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="mt-10">
+            <div className="flex items-center justify-between">
+              <h2 className="section-title text-2xl">Tabell</h2>
+              <span className="kpi-subtle">{tableLabel}</span>
+            </div>
+            <div className="mt-4 table-shell">
+              <div className="table-head grid grid-cols-7 gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#534a42]">
+                <div>{tableFirstColumn}</div>
+                <div>Senast</div>
+                <div>+/-</div>
+                <div>1V</div>
+                <div>I ar</div>
+                <div>1 ar</div>
+                <div>Pristyp</div>
+              </div>
+              {tableItems.length > 0 ? (
+                tableItems.map((item) => (
+                  <div
+                    key={`table-${item.id}`}
+                    data-testid={`table-row-${item.id}`}
+                    className="grid grid-cols-7 gap-2 border-t border-[var(--border)] px-4 py-3 text-sm"
+                  >
+                    <div>{item.name}</div>
+                    <div>{formatValue(item.last)}</div>
+                    <div>{formatPercent(item.day_pct)}</div>
+                    <div>{formatPercent(item.w1_pct)}</div>
+                    <div>{formatPercent(item.ytd_pct)}</div>
+                    <div>{formatPercent(item.y1_pct)}</div>
+                    <div>{item.price_type ?? "--"}</div>
+                  </div>
+                ))
+              ) : (
+                <div className="px-4 py-6 text-sm text-[#6b625a]">{tableEmptyText}</div>
+              )}
+            </div>
+          </section>
+        </>
+      ) : null}
+
+      {showInflation ? (
+        <section className="mt-8">
+          <div className="flex items-center justify-between">
+            <h2 className="section-title text-2xl">Inflation: Sverige & USA</h2>
+            <span className="kpi-subtle">Samma yta som Råvaror/Mag 7</span>
+          </div>
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {filteredInflationItems.map((item) => (
+              <article key={item.id} data-testid={`inflation-card-${item.id}`} className="card-surface p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold">{inflationRole(item)}</div>
+                    <div className="text-xs kpi-subtle">{item.name}</div>
+                  </div>
+                  <span className="badge">{item.is_stale ? "Stale" : "Live"}</span>
+                </div>
+                <div className="mt-4 text-3xl font-semibold">{formatValue(item.last)}</div>
+                <div className="mt-1 text-sm text-[#6b625a]">{formatPercent(item.y1_pct)} senaste 12 månaderna</div>
+                <Sparkline points={item.sparkline} />
+              </article>
+            ))}
+          </div>
+          {filteredInflationItems.length === 0 ? (
+            <div className="card-surface mt-4 p-5 text-sm text-[#6b625a]">Ingen inflationsdata tillgänglig.</div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {showCharts ? (
+        <section className="mt-8">
+          <div className="flex items-center justify-between">
+            <h2 className="section-title text-2xl">Grafer</h2>
+            <span className="kpi-subtle">Välj graf i rutorna</span>
+          </div>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {filteredInflationItems.map((item) => (
+              <button
+                key={`chart-selector-${item.id}`}
+                className="tab-pill"
+                data-active={selectedChart?.id === item.id}
+                onClick={() => setSelectedChartId(item.id)}
+              >
+                {inflationRole(item)}
+              </button>
+            ))}
+          </div>
+          {selectedChart ? (
+            <article className="card-surface mt-4 p-6" data-testid="selected-chart-panel">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-semibold">{item.name}</div>
-                  <div className="text-xs kpi-subtle">{item.unit ?? "--"}</div>
+                  <h3 className="text-lg font-semibold">{inflationRole(selectedChart)} inflation</h3>
+                  <p className="text-xs text-[#6b625a]">{selectedChart.name}</p>
                 </div>
-                <span className="badge">{item.is_stale ? "Stale" : "Live"}</span>
+                <span className="badge">{selectedChart.is_stale ? "Stale" : "Live"}</span>
               </div>
-              <div className="mt-6 kpi-value">{formatValue(item.last)}</div>
-              <div className="mt-2 text-sm kpi-change">{formatPercent(item.day_pct)}</div>
-              <div className="mt-4 h-12 rounded-xl bg-[linear-gradient(90deg,#1b2a41,transparent)] opacity-20" />
+              <div className="mt-4 text-sm text-[#6b625a]">Senast: {formatValue(selectedChart.last)} ({formatPercent(selectedChart.day_pct)})</div>
+              <Sparkline points={selectedChart.sparkline} />
             </article>
-          ))}
-          {kpiItems.length === 0 ? (
-            <div className="card-surface p-5 text-sm text-[#6b625a]">{kpiEmptyText}</div>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="mt-10">
-        <div className="flex items-center justify-between">
-          <h2 className="section-title text-2xl">Tabell</h2>
-          <span className="kpi-subtle">{tableLabel}</span>
-        </div>
-        <div className="mt-4 table-shell">
-          <div className="table-head grid grid-cols-7 gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#534a42]">
-            <div>{tableFirstColumn}</div>
-            <div>Senast</div>
-            <div>+/-</div>
-            <div>1V</div>
-            <div>I ar</div>
-            <div>1 ar</div>
-            <div>Pristyp</div>
-          </div>
-          {tableItems.length > 0 ? (
-            tableItems.map((item) => (
-              <div
-                key={`table-${item.id}`}
-                data-testid={`table-row-${item.id}`}
-                className="grid grid-cols-7 gap-2 border-t border-[var(--border)] px-4 py-3 text-sm"
-              >
-                <div>{item.name}</div>
-                <div>{formatValue(item.last)}</div>
-                <div>{formatPercent(item.day_pct)}</div>
-                <div>{formatPercent(item.w1_pct)}</div>
-                <div>{formatPercent(item.ytd_pct)}</div>
-                <div>{formatPercent(item.y1_pct)}</div>
-                <div>{item.price_type ?? "--"}</div>
-              </div>
-            ))
           ) : (
-            <div className="px-4 py-6 text-sm text-[#6b625a]">{tableEmptyText}</div>
+            <div className="card-surface mt-4 p-5 text-sm text-[#6b625a]">Ingen grafdata tillgänglig.</div>
           )}
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       <section className="mt-10 card-surface p-6">
         <div className="flex items-center justify-between">

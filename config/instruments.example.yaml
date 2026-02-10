@@ -129,22 +129,22 @@ instruments:
     display_group: table
     sort_order: 7
     module: mag7
-  - id: tip
-    name_sv: USA TIPS ETF
-    ticker: TIP
-    unit_label: USD
-    price_type: ETF
-    badge_symbol: TIP
+  - id: inflation_se
+    name_sv: Sverige KPI (YoY)
+    ticker: CP0000SEM086NEST
+    unit_label: %
+    price_type: KPI
+    badge_symbol: SE
     precision: 2
     display_group: cards
     sort_order: 1
     module: inflation
-  - id: vtip
-    name_sv: USA Kort TIPS ETF
-    ticker: VTIP
-    unit_label: USD
-    price_type: ETF
-    badge_symbol: VTIP
+  - id: inflation_us
+    name_sv: USA KPI (YoY)
+    ticker: CPIAUCSL
+    unit_label: %
+    price_type: KPI
+    badge_symbol: US
     precision: 2
     display_group: cards
     sort_order: 2

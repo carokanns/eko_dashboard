@@ -45,7 +45,7 @@ function buildSummary(overrides?: Partial<(typeof summary)["meta"]>) {
 }
 
 test("renders dashboard with live values", () => {
-  render(<DashboardView commodities={summary} mag7={summary} warnings={[]} />);
+  render(<DashboardView commodities={summary} mag7={summary} inflation={summary} warnings={[]} />);
   expect(screen.getByText("Marknadsoversikt")).toBeInTheDocument();
   expect(screen.getAllByText("Brentolja").length).toBeGreaterThan(0);
   expect(screen.getAllByText("82.50").length).toBeGreaterThan(0);
@@ -53,7 +53,7 @@ test("renders dashboard with live values", () => {
 });
 
 test("renders stale indicator and warning fallback", () => {
-  render(<DashboardView commodities={null} mag7={null} warnings={["Kunde inte hamta ravaror just nu."]} />);
+  render(<DashboardView commodities={null} mag7={null} inflation={null} warnings={["Kunde inte hamta ravaror just nu."]} />);
   expect(screen.getByText("Kunde inte hamta ravaror just nu.")).toBeInTheDocument();
   expect(screen.getAllByText("Partial").length).toBeGreaterThan(0);
   expect(screen.getAllByText("Offline").length).toBeGreaterThan(0);
@@ -76,14 +76,14 @@ test("renders both live and stale badges for partial commodity data", () => {
     ],
   };
 
-  render(<DashboardView commodities={mixed} mag7={summary} warnings={[]} />);
+  render(<DashboardView commodities={mixed} mag7={summary} inflation={summary} warnings={[]} />);
   expect(screen.getAllByText("Live").length).toBeGreaterThan(0);
   expect(screen.getAllByText("Stale").length).toBeGreaterThan(0);
 });
 
 test("handles cached and invalid fetched_at without crashing", () => {
   const cachedWithInvalidDate = buildSummary({ cached: true, fetched_at: "not-a-date" });
-  render(<DashboardView commodities={cachedWithInvalidDate} mag7={null} warnings={[]} />);
+  render(<DashboardView commodities={cachedWithInvalidDate} mag7={null} inflation={null} warnings={[]} />);
   expect(screen.getAllByText("--:--").length).toBeGreaterThan(0);
 });
 
@@ -99,7 +99,7 @@ test("filters items based on search input", () => {
       },
     ],
   };
-  render(<DashboardView commodities={commodities} mag7={null} warnings={[]} />);
+  render(<DashboardView commodities={commodities} mag7={null} inflation={null} warnings={[]} />);
   fireEvent.change(screen.getAllByPlaceholderText("Sok i ravaror")[0], { target: { value: "guld" } });
   expect(screen.getAllByText("Guld").length).toBeGreaterThan(0);
   expect(screen.queryByText("Brentolja")).not.toBeInTheDocument();
@@ -113,7 +113,7 @@ test("sorts Mag7 by YTD when toggle is clicked", () => {
       { ...summary.items[0], id: "nvda", name: "Nvidia", ytd_pct: 9.0 },
     ],
   };
-  render(<DashboardView commodities={summary} mag7={mag7} warnings={[]} />);
+  render(<DashboardView commodities={summary} mag7={mag7} inflation={summary} warnings={[]} />);
   let mag7Rows = screen.getAllByTestId(/^mag7-row-/);
   expect(mag7Rows[0]).toHaveAttribute("data-testid", "mag7-row-nvda");
   fireEvent.click(screen.getByRole("button", { name: /Sortera YTD/i }));
@@ -135,7 +135,7 @@ test("shows top 6 Mag7 companies in KPI cards when Mag 7 tab is selected", () =>
     ],
   };
 
-  render(<DashboardView commodities={summary} mag7={mag7} warnings={[]} />);
+  render(<DashboardView commodities={summary} mag7={mag7} inflation={summary} warnings={[]} />);
   fireEvent.click(screen.getByRole("button", { name: "Mag 7" }));
 
   expect(screen.getByTestId("kpi-card-msft")).toBeInTheDocument();
@@ -157,7 +157,7 @@ test("switches table content to Mag7 when Mag 7 tab is selected", () => {
     items: [{ ...summary.items[0], id: "aapl", name: "Apple" }],
   };
 
-  render(<DashboardView commodities={commodities} mag7={mag7} warnings={[]} />);
+  render(<DashboardView commodities={commodities} mag7={mag7} inflation={summary} warnings={[]} />);
   expect(screen.getByTestId("table-row-brent")).toBeInTheDocument();
   expect(screen.queryByTestId("table-row-aapl")).not.toBeInTheDocument();
 
@@ -165,4 +165,39 @@ test("switches table content to Mag7 when Mag 7 tab is selected", () => {
   expect(screen.getByText("MAG 7")).toBeInTheDocument();
   expect(screen.getByTestId("table-row-aapl")).toBeInTheDocument();
   expect(screen.queryByTestId("table-row-brent")).not.toBeInTheDocument();
+});
+
+
+test("renders inflation cards for Sweden and USA", () => {
+  const inflation = {
+    ...summary,
+    items: [
+      { ...summary.items[0], id: "inflation_se", name: "Sverige KPI" },
+      { ...summary.items[0], id: "inflation_us", name: "USA KPI" },
+    ],
+  };
+
+  render(<DashboardView commodities={summary} mag7={summary} inflation={inflation} warnings={[]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Inflation" }));
+
+  expect(screen.getByText("Inflation: Sverige & USA")).toBeInTheDocument();
+  expect(screen.getByTestId("inflation-card-inflation_se")).toBeInTheDocument();
+  expect(screen.getByTestId("inflation-card-inflation_us")).toBeInTheDocument();
+});
+
+test("charts tab switches selected graph panel", () => {
+  const inflation = {
+    ...summary,
+    items: [
+      { ...summary.items[0], id: "inflation_se", name: "Sverige KPI" },
+      { ...summary.items[0], id: "inflation_us", name: "USA KPI" },
+    ],
+  };
+
+  render(<DashboardView commodities={summary} mag7={summary} inflation={inflation} warnings={[]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Grafer" }));
+
+  expect(screen.getByTestId("selected-chart-panel")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "USA" }));
+  expect(screen.getByText("USA inflation")).toBeInTheDocument();
 });
