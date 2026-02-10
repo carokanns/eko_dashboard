@@ -66,7 +66,7 @@ export function fetchCommoditySeries(id: string, range: "1m" | "3m" | "1y" = "1m
 
 export function fetchInflationSeries(
   id: string,
-  range: "3m" | "6m" | "1y" = "3m",
+  range: "3m" | "6m" | "1y" = "1y",
 ): Promise<SeriesResponse> {
   const query = new URLSearchParams({ id, range });
   return fetchJson<SeriesResponse>(`/api/inflation/series?${query.toString()}`);

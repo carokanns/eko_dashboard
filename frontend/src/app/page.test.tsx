@@ -261,6 +261,36 @@ test("clicking KPI card updates selected market chart panel", () => {
   expect(screen.getByRole("heading", { name: "Guld" })).toBeInTheDocument();
 });
 
+test("orders commodity KPI cards with gold silver copper first row and zinc first in second row", () => {
+  const commodities = {
+    ...summary,
+    items: [
+      { ...summary.items[0], id: "brent", name: "Brentolja" },
+      { ...summary.items[0], id: "wti", name: "WTI-olja" },
+      { ...summary.items[0], id: "gold", name: "Guld" },
+      { ...summary.items[0], id: "silver", name: "Silver" },
+      { ...summary.items[0], id: "copper", name: "Koppar" },
+      { ...summary.items[0], id: "zinc", name: "Zink" },
+    ],
+  };
+
+  render(
+    <DashboardView
+      commodities={commodities}
+      mag7={summary}
+      inflation={summary}
+      inflationSeriesByRange={inflationSeriesByRange}
+      warnings={[]}
+    />,
+  );
+
+  const cards = screen.getAllByTestId(/^kpi-card-/);
+  expect(cards[0]).toHaveAttribute("data-testid", "kpi-card-gold");
+  expect(cards[1]).toHaveAttribute("data-testid", "kpi-card-silver");
+  expect(cards[2]).toHaveAttribute("data-testid", "kpi-card-copper");
+  expect(cards[3]).toHaveAttribute("data-testid", "kpi-card-zinc");
+});
+
 
 test("renders shared inflation graph and allows range switch", () => {
   const inflation = {

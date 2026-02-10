@@ -43,7 +43,7 @@ def inflation_summary():
 
 
 @router.get("/series")
-def inflation_series(id: str, range: str = Query(default="3m", pattern="^(1m|3m|6m|1y)$")):
+def inflation_series(id: str, range: str = Query(default="1y", pattern="^(1m|3m|6m|1y)$")):
     cache_key = f"inflation_series:{id}:{range}"
     cached = cache.get(cache_key)
     if cached is not None:

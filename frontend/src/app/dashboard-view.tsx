@@ -25,9 +25,9 @@ type ModuleStatus = "fresh" | "partial" | "stale" | "offline";
 type InflationRange = "3m" | "6m" | "1y";
 
 const inflationRanges: Array<{ id: InflationRange; label: string }> = [
-  { id: "3m", label: "3 man" },
-  { id: "6m", label: "6 man" },
   { id: "1y", label: "12 man" },
+  { id: "6m", label: "6 man" },
+  { id: "3m", label: "3 man" },
 ];
 
 const EMPTY_ITEMS: SummaryItem[] = [];
@@ -99,6 +99,24 @@ function topMag7Cards(items: SummaryItem[]): SummaryItem[] {
       return ra - rb;
     })
     .slice(0, 6);
+}
+
+function sortCommoditiesForDisplay(items: SummaryItem[]): SummaryItem[] {
+  const rank: Record<string, number> = {
+    gold: 1,
+    silver: 2,
+    copper: 3,
+    zinc: 4,
+    brent: 5,
+    wti: 6,
+  };
+
+  return [...items].sort((a, b) => {
+    const ra = rank[a.id] ?? Number.MAX_SAFE_INTEGER;
+    const rb = rank[b.id] ?? Number.MAX_SAFE_INTEGER;
+    if (ra !== rb) return ra - rb;
+    return a.name.localeCompare(b.name, "sv");
+  });
 }
 
 function Sparkline({ points }: { points: { t: string; v: number }[] }) {
@@ -176,7 +194,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
   const [searchQuery, setSearchQuery] = useState("");
   const [mag7SortDirection, setMag7SortDirection] = useState<"asc" | "desc">("desc");
   const [selectedMarketChartId, setSelectedMarketChartId] = useState<string | null>(null);
-  const [inflationRange, setInflationRange] = useState<InflationRange>("3m");
+  const [inflationRange, setInflationRange] = useState<InflationRange>("1y");
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -212,7 +230,9 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
   );
   const sourceLabel = sourceNames.length > 0 ? sourceNames.join(" + ") : "--";
 
-  const filteredCommodityItems = commodityItems.filter((item) => matchesSearch(item, searchQuery));
+  const filteredCommodityItems = sortCommoditiesForDisplay(
+    commodityItems.filter((item) => matchesSearch(item, searchQuery)),
+  );
   const filteredMag7Items = sortMag7ByYtd(
     mag7Items.filter((item) => matchesSearch(item, searchQuery)),
     mag7SortDirection,

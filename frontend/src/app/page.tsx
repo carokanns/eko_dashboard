@@ -32,7 +32,7 @@ export default async function Home() {
   }
 
   if (inflation) {
-    const ranges: Array<"3m" | "6m" | "1y"> = ["3m", "6m", "1y"];
+    const ranges: Array<"3m" | "6m" | "1y"> = ["1y", "6m", "3m"];
     const ids = inflation.items.map((item) => item.id);
     const requests = ranges.flatMap((range) => ids.map((id) => ({ range, id })));
     const results = await Promise.allSettled(
