@@ -132,7 +132,7 @@ instruments:
   - id: inflation_se
     name_sv: Sverige KPI (YoY)
     ticker: CP0000SEM086NEST
-    unit_label: %
+    unit_label: "%"
     price_type: KPI
     badge_symbol: SE
     precision: 2
@@ -142,7 +142,7 @@ instruments:
   - id: inflation_us
     name_sv: USA KPI (YoY)
     ticker: CPIAUCSL
-    unit_label: %
+    unit_label: "%"
     price_type: KPI
     badge_symbol: US
     precision: 2
