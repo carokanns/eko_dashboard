@@ -10,6 +10,7 @@ import yfinance as yf
 RANGE_TO_PERIOD = {
     "1m": "1mo",
     "3m": "3mo",
+    "6m": "6mo",
     "1y": "1y",
 }
 

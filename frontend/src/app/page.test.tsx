@@ -34,6 +34,12 @@ const summary = {
   },
 };
 
+const inflationSeriesByRange: Record<"3m" | "6m" | "1y", Record<string, { t: string; v: number }[]>> = {
+  "3m": {},
+  "6m": {},
+  "1y": {},
+};
+
 function buildSummary(overrides?: Partial<(typeof summary)["meta"]>) {
   return {
     ...summary,
@@ -45,7 +51,15 @@ function buildSummary(overrides?: Partial<(typeof summary)["meta"]>) {
 }
 
 test("renders dashboard with live values", () => {
-  render(<DashboardView commodities={summary} mag7={summary} inflation={summary} warnings={[]} />);
+  render(
+    <DashboardView
+      commodities={summary}
+      mag7={summary}
+      inflation={summary}
+      inflationSeriesByRange={inflationSeriesByRange}
+      warnings={[]}
+    />,
+  );
   expect(screen.getByText("Marknadsoversikt")).toBeInTheDocument();
   expect(screen.getAllByText("Brentolja").length).toBeGreaterThan(0);
   expect(screen.getAllByText("82.50").length).toBeGreaterThan(0);
@@ -53,7 +67,15 @@ test("renders dashboard with live values", () => {
 });
 
 test("renders stale indicator and warning fallback", () => {
-  render(<DashboardView commodities={null} mag7={null} inflation={null} warnings={["Kunde inte hamta ravaror just nu."]} />);
+  render(
+    <DashboardView
+      commodities={null}
+      mag7={null}
+      inflation={null}
+      inflationSeriesByRange={inflationSeriesByRange}
+      warnings={["Kunde inte hamta ravaror just nu."]}
+    />,
+  );
   expect(screen.getByText("Kunde inte hamta ravaror just nu.")).toBeInTheDocument();
   expect(screen.getAllByText("Partial").length).toBeGreaterThan(0);
   expect(screen.getAllByText("Offline").length).toBeGreaterThan(0);
@@ -76,14 +98,30 @@ test("renders both live and stale badges for partial commodity data", () => {
     ],
   };
 
-  render(<DashboardView commodities={mixed} mag7={summary} inflation={summary} warnings={[]} />);
+  render(
+    <DashboardView
+      commodities={mixed}
+      mag7={summary}
+      inflation={summary}
+      inflationSeriesByRange={inflationSeriesByRange}
+      warnings={[]}
+    />,
+  );
   expect(screen.getAllByText("Live").length).toBeGreaterThan(0);
   expect(screen.getAllByText("Stale").length).toBeGreaterThan(0);
 });
 
 test("handles cached and invalid fetched_at without crashing", () => {
   const cachedWithInvalidDate = buildSummary({ cached: true, fetched_at: "not-a-date" });
-  render(<DashboardView commodities={cachedWithInvalidDate} mag7={null} inflation={null} warnings={[]} />);
+  render(
+    <DashboardView
+      commodities={cachedWithInvalidDate}
+      mag7={null}
+      inflation={null}
+      inflationSeriesByRange={inflationSeriesByRange}
+      warnings={[]}
+    />,
+  );
   expect(screen.getAllByText("--:--").length).toBeGreaterThan(0);
 });
 
@@ -99,7 +137,15 @@ test("filters items based on search input", () => {
       },
     ],
   };
-  render(<DashboardView commodities={commodities} mag7={null} inflation={null} warnings={[]} />);
+  render(
+    <DashboardView
+      commodities={commodities}
+      mag7={null}
+      inflation={null}
+      inflationSeriesByRange={inflationSeriesByRange}
+      warnings={[]}
+    />,
+  );
   fireEvent.change(screen.getAllByPlaceholderText("Sok i ravaror")[0], { target: { value: "guld" } });
   expect(screen.getAllByText("Guld").length).toBeGreaterThan(0);
   expect(screen.queryByText("Brentolja")).not.toBeInTheDocument();
@@ -113,7 +159,15 @@ test("sorts Mag7 by YTD when toggle is clicked", () => {
       { ...summary.items[0], id: "nvda", name: "Nvidia", ytd_pct: 9.0 },
     ],
   };
-  render(<DashboardView commodities={summary} mag7={mag7} inflation={summary} warnings={[]} />);
+  render(
+    <DashboardView
+      commodities={summary}
+      mag7={mag7}
+      inflation={summary}
+      inflationSeriesByRange={inflationSeriesByRange}
+      warnings={[]}
+    />,
+  );
   let mag7Rows = screen.getAllByTestId(/^mag7-row-/);
   expect(mag7Rows[0]).toHaveAttribute("data-testid", "mag7-row-nvda");
   fireEvent.click(screen.getByRole("button", { name: /Sortera YTD/i }));
@@ -135,7 +189,15 @@ test("shows top 6 Mag7 companies in KPI cards when Mag 7 tab is selected", () =>
     ],
   };
 
-  render(<DashboardView commodities={summary} mag7={mag7} inflation={summary} warnings={[]} />);
+  render(
+    <DashboardView
+      commodities={summary}
+      mag7={mag7}
+      inflation={summary}
+      inflationSeriesByRange={inflationSeriesByRange}
+      warnings={[]}
+    />,
+  );
   fireEvent.click(screen.getByRole("button", { name: "Mag 7" }));
 
   expect(screen.getByTestId("kpi-card-msft")).toBeInTheDocument();
@@ -157,7 +219,15 @@ test("switches table content to Mag7 when Mag 7 tab is selected", () => {
     items: [{ ...summary.items[0], id: "aapl", name: "Apple" }],
   };
 
-  render(<DashboardView commodities={commodities} mag7={mag7} inflation={summary} warnings={[]} />);
+  render(
+    <DashboardView
+      commodities={commodities}
+      mag7={mag7}
+      inflation={summary}
+      inflationSeriesByRange={inflationSeriesByRange}
+      warnings={[]}
+    />,
+  );
   expect(screen.getByTestId("table-row-brent")).toBeInTheDocument();
   expect(screen.queryByTestId("table-row-aapl")).not.toBeInTheDocument();
 
@@ -168,7 +238,7 @@ test("switches table content to Mag7 when Mag 7 tab is selected", () => {
 });
 
 
-test("renders inflation cards for Sweden and USA", () => {
+test("renders shared inflation graph and allows range switch", () => {
   const inflation = {
     ...summary,
     items: [
@@ -176,13 +246,41 @@ test("renders inflation cards for Sweden and USA", () => {
       { ...summary.items[0], id: "inflation_us", name: "USA KPI" },
     ],
   };
+  const rangeSeries = {
+    "3m": {
+      inflation_se: [{ t: "2026-01-01T00:00:00Z", v: 1.0 }, { t: "2026-02-01T00:00:00Z", v: 1.2 }],
+      inflation_us: [{ t: "2026-01-01T00:00:00Z", v: 2.0 }, { t: "2026-02-01T00:00:00Z", v: 2.1 }],
+    },
+    "6m": {
+      inflation_se: [{ t: "2025-08-01T00:00:00Z", v: 0.8 }, { t: "2026-02-01T00:00:00Z", v: 1.2 }],
+      inflation_us: [{ t: "2025-08-01T00:00:00Z", v: 1.9 }, { t: "2026-02-01T00:00:00Z", v: 2.1 }],
+    },
+    "1y": {
+      inflation_se: [{ t: "2025-02-01T00:00:00Z", v: 0.6 }, { t: "2026-02-01T00:00:00Z", v: 1.2 }],
+      inflation_us: [{ t: "2025-02-01T00:00:00Z", v: 1.7 }, { t: "2026-02-01T00:00:00Z", v: 2.1 }],
+    },
+  };
 
-  render(<DashboardView commodities={summary} mag7={summary} inflation={inflation} warnings={[]} />);
+  render(
+    <DashboardView
+      commodities={summary}
+      mag7={summary}
+      inflation={inflation}
+      inflationSeriesByRange={rangeSeries}
+      warnings={[]}
+    />,
+  );
   fireEvent.click(screen.getByRole("button", { name: "Inflation" }));
 
   expect(screen.getByText("Inflation: Sverige & USA")).toBeInTheDocument();
-  expect(screen.getByTestId("inflation-card-inflation_se")).toBeInTheDocument();
-  expect(screen.getByTestId("inflation-card-inflation_us")).toBeInTheDocument();
+  expect(screen.getByTestId("inflation-shared-chart-panel")).toBeInTheDocument();
+  expect(screen.getByTestId("inflation-line-sweden")).toBeInTheDocument();
+  expect(screen.getByTestId("inflation-line-usa")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "6 man" }));
+  expect(screen.getByRole("button", { name: "6 man" })).toHaveAttribute("data-active", "true");
+  fireEvent.click(screen.getByRole("button", { name: "12 man" }));
+  expect(screen.getByRole("button", { name: "12 man" })).toHaveAttribute("data-active", "true");
 });
 
 test("charts tab switches selected graph panel", () => {
@@ -194,7 +292,15 @@ test("charts tab switches selected graph panel", () => {
     ],
   };
 
-  render(<DashboardView commodities={summary} mag7={summary} inflation={inflation} warnings={[]} />);
+  render(
+    <DashboardView
+      commodities={summary}
+      mag7={summary}
+      inflation={inflation}
+      inflationSeriesByRange={inflationSeriesByRange}
+      warnings={[]}
+    />,
+  );
   fireEvent.click(screen.getByRole("button", { name: "Grafer" }));
 
   expect(screen.getByTestId("selected-chart-panel")).toBeInTheDocument();

@@ -176,7 +176,7 @@ def test_inflation_summary_response_shape_and_cache(client: TestClient, monkeypa
     first = client.get("/api/inflation/summary")
     assert first.status_code == 200
     payload = first.json()
-    assert payload["meta"]["source"] == "yahoo_finance"
+    assert payload["meta"]["source"] == "fred"
     assert payload["meta"]["cached"] is False
     assert isinstance(payload["meta"]["fetched_at"], str)
 
@@ -189,6 +189,29 @@ def test_inflation_summary_response_shape_and_cache(client: TestClient, monkeypa
 def test_inflation_series_unknown_id_returns_404(client: TestClient):
     response = client.get("/api/inflation/series", params={"id": "unknown-id", "range": "1m"})
     assert response.status_code == 404
+
+
+def test_inflation_series_supports_6m_range(client: TestClient, monkeypatch):
+    now = datetime.now(timezone.utc)
+    calls = {"count": 0}
+
+    def fake_series(_instrument, _range):
+        calls["count"] += 1
+        return [SparkPoint(t=now - timedelta(days=1), v=2.0), SparkPoint(t=now, v=2.1)]
+
+    monkeypatch.setattr("app.routes.inflation.fetch_series_for_instrument", fake_series)
+
+    response = client.get("/api/inflation/series", params={"id": "inflation_se", "range": "6m"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["range"] == "6m"
+    assert len(payload["points"]) == 2
+    assert payload["meta"]["cached"] is False
+
+    cached = client.get("/api/inflation/series", params={"id": "inflation_se", "range": "6m"})
+    assert cached.status_code == 200
+    assert cached.json()["meta"]["cached"] is True
+    assert calls["count"] == 1
 
 
 def test_charts_series_validates_range_and_uses_cache(client: TestClient, monkeypatch):

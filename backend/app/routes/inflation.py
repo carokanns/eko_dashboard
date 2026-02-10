@@ -8,7 +8,7 @@ from fastapi import Query
 
 from app.core.cache import cache
 from app.core.config import load_instruments
-from app.services.market_data import fetch_series_for_instrument, fetch_summary_for_instruments
+from app.services.inflation_data import fetch_series_for_instrument, fetch_summary_for_instruments
 
 router = APIRouter(prefix="/api/inflation", tags=["inflation"])
 
@@ -21,7 +21,7 @@ def inflation_summary():
         return {
             "items": cached.value,
             "meta": {
-                "source": "yahoo_finance",
+                "source": "fred",
                 "cached": True,
                 "fetched_at": cached.fetched_at,
             },
@@ -35,7 +35,7 @@ def inflation_summary():
     return {
         "items": items,
         "meta": {
-            "source": "yahoo_finance",
+            "source": "fred",
             "cached": False,
             "fetched_at": fetched_at,
         },
@@ -43,7 +43,7 @@ def inflation_summary():
 
 
 @router.get("/series")
-def inflation_series(id: str, range: str = Query(default="1m", pattern="^(1m|3m|1y)$")):
+def inflation_series(id: str, range: str = Query(default="3m", pattern="^(1m|3m|6m|1y)$")):
     cache_key = f"inflation_series:{id}:{range}"
     cached = cache.get(cache_key)
     if cached is not None:
@@ -52,7 +52,7 @@ def inflation_series(id: str, range: str = Query(default="1m", pattern="^(1m|3m|
             "range": range,
             "points": cached.value,
             "meta": {
-                "source": "yahoo_finance",
+                "source": "fred",
                 "cached": True,
                 "fetched_at": cached.fetched_at,
             },
@@ -71,7 +71,7 @@ def inflation_series(id: str, range: str = Query(default="1m", pattern="^(1m|3m|
         "range": range,
         "points": points,
         "meta": {
-            "source": "yahoo_finance",
+            "source": "fred",
             "cached": False,
             "fetched_at": fetched_at,
         },

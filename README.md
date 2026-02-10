@@ -12,8 +12,9 @@ Status:
 
 1. Frontend och backend är kopplade end-to-end.
 2. Marknadsdata hämtas från Yahoo Finance via `yfinance`.
-3. In-memory cache används med TTL 60 sekunder.
-4. Partial responses stöds: enskilda instrument kan vara stale utan att hela endpointen faller.
+3. Inflation hämtas från FRED-serier (USA + Sverige) och beräknas som YoY i backend.
+4. In-memory cache används med TTL 60 sekunder.
+5. Partial responses stöds: enskilda instrument kan vara stale utan att hela endpointen faller.
 
 API:
 
@@ -28,6 +29,7 @@ API:
 Summary-svar:
 
 - `{ "items": [...], "meta": { "source": "yahoo_finance", "cached": boolean, "fetched_at": iso-datetime } }`
+- För inflation är `meta.source` = `fred`.
 
 Begränsningar (v1):
 

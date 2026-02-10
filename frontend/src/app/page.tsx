@@ -1,9 +1,14 @@
-import { fetchCommoditiesSummary, fetchInflationSummary, fetchMag7Summary } from "@/lib/api";
+import { fetchCommoditiesSummary, fetchInflationSeries, fetchInflationSummary, fetchMag7Summary, type SparkPoint } from "@/lib/api";
 
 import { DashboardView } from "./dashboard-view";
 
 export default async function Home() {
   const warnings: string[] = [];
+  const inflationSeriesByRange: Record<"3m" | "6m" | "1y", Record<string, SparkPoint[]>> = {
+    "3m": {},
+    "6m": {},
+    "1y": {},
+  };
 
   const [commoditiesResult, mag7Result, inflationResult] = await Promise.allSettled([
     fetchCommoditiesSummary(),
@@ -26,5 +31,36 @@ export default async function Home() {
     warnings.push("Kunde inte hamta inflation just nu.");
   }
 
-  return <DashboardView commodities={commodities} mag7={mag7} inflation={inflation} warnings={warnings} />;
+  if (inflation) {
+    const ranges: Array<"3m" | "6m" | "1y"> = ["3m", "6m", "1y"];
+    const ids = inflation.items.map((item) => item.id);
+    const requests = ranges.flatMap((range) => ids.map((id) => ({ range, id })));
+    const results = await Promise.allSettled(
+      requests.map(({ range, id }) => fetchInflationSeries(id, range)),
+    );
+
+    let hasErrors = false;
+    results.forEach((result, index) => {
+      const { range, id } = requests[index];
+      if (result.status === "fulfilled") {
+        inflationSeriesByRange[range][id] = result.value.points;
+      } else {
+        hasErrors = true;
+      }
+    });
+
+    if (hasErrors) {
+      warnings.push("Vissa inflationsserier kunde inte hamtas.");
+    }
+  }
+
+  return (
+    <DashboardView
+      commodities={commodities}
+      mag7={mag7}
+      inflation={inflation}
+      inflationSeriesByRange={inflationSeriesByRange}
+      warnings={warnings}
+    />
+  );
 }

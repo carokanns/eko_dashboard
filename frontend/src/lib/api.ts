@@ -32,7 +32,7 @@ export type SummaryResponse = {
 
 export type SeriesResponse = {
   id: string;
-  range: "1m" | "3m" | "1y";
+  range: "1m" | "3m" | "6m" | "1y";
   points: SparkPoint[];
   meta: ApiMeta;
 };
@@ -62,4 +62,12 @@ export function fetchInflationSummary(): Promise<SummaryResponse> {
 export function fetchCommoditySeries(id: string, range: "1m" | "3m" | "1y" = "1m"): Promise<SeriesResponse> {
   const query = new URLSearchParams({ id, range });
   return fetchJson<SeriesResponse>(`/api/commodities/series?${query.toString()}`);
+}
+
+export function fetchInflationSeries(
+  id: string,
+  range: "3m" | "6m" | "1y" = "3m",
+): Promise<SeriesResponse> {
+  const query = new URLSearchParams({ id, range });
+  return fetchJson<SeriesResponse>(`/api/inflation/series?${query.toString()}`);
 }

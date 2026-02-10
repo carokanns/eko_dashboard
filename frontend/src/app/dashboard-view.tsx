@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import type { SummaryItem, SummaryResponse } from "@/lib/api";
+import type { SparkPoint, SummaryItem, SummaryResponse } from "@/lib/api";
 
 const tabs = [
   { id: "commodities", label: "Råvaror" },
@@ -18,10 +18,18 @@ type DashboardViewProps = {
   commodities: SummaryResponse | null;
   mag7: SummaryResponse | null;
   inflation: SummaryResponse | null;
+  inflationSeriesByRange: Record<"3m" | "6m" | "1y", Record<string, SparkPoint[]>>;
   warnings: string[];
 };
 
 type ModuleStatus = "fresh" | "partial" | "stale" | "offline";
+type InflationRange = "3m" | "6m" | "1y";
+
+const inflationRanges: Array<{ id: InflationRange; label: string }> = [
+  { id: "3m", label: "3 man" },
+  { id: "6m", label: "6 man" },
+  { id: "1y", label: "12 man" },
+];
 
 const EMPTY_ITEMS: SummaryItem[] = [];
 
@@ -118,16 +126,52 @@ function Sparkline({ points }: { points: { t: string; v: number }[] }) {
   );
 }
 
+function InflationComparisonChart({
+  swedenPoints,
+  usaPoints,
+}: {
+  swedenPoints: SparkPoint[];
+  usaPoints: SparkPoint[];
+}) {
+  const buildPath = (points: SparkPoint[], min: number, range: number) =>
+    points
+      .map((point, index) => {
+        const x = points.length === 1 ? 50 : (index / (points.length - 1)) * 100;
+        const y = 100 - ((point.v - min) / range) * 100;
+        return `${x},${y}`;
+      })
+      .join(" ");
+
+  const values = [...swedenPoints, ...usaPoints].map((point) => point.v);
+  if (values.length < 2) {
+    return <div className="mt-4 h-64 rounded-xl bg-[linear-gradient(90deg,#1b2a41,transparent)] opacity-20" />;
+  }
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const swedenPath = buildPath(swedenPoints, min, range);
+  const usaPath = buildPath(usaPoints, min, range);
+
+  return (
+    <svg className="mt-4 h-64 w-full" viewBox="0 0 100 100" preserveAspectRatio="none" data-testid="inflation-comparison-chart">
+      <polyline fill="none" stroke="#1b2a41" strokeWidth="2.6" points={swedenPath} data-testid="inflation-line-sweden" />
+      <polyline fill="none" stroke="#f28f3b" strokeWidth="2.6" points={usaPath} data-testid="inflation-line-usa" />
+    </svg>
+  );
+}
+
 function inflationRole(item: SummaryItem): string {
   return item.id.includes("se") ? "Sverige" : "USA";
 }
 
-export function DashboardView({ commodities, mag7, inflation, warnings }: DashboardViewProps) {
+export function DashboardView({ commodities, mag7, inflation, inflationSeriesByRange, warnings }: DashboardViewProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>("commodities");
   const [searchQuery, setSearchQuery] = useState("");
   const [mag7SortDirection, setMag7SortDirection] = useState<"asc" | "desc">("desc");
   const [selectedChartId, setSelectedChartId] = useState<string | null>(null);
+  const [inflationRange, setInflationRange] = useState<InflationRange>("3m");
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -162,6 +206,13 @@ export function DashboardView({ commodities, mag7, inflation, warnings }: Dashbo
   );
 
   const filteredInflationItems = inflationItems.filter((item) => matchesSearch(item, searchQuery));
+  const swedenInflationItem = inflationItems.find((item) => item.id.includes("se")) ?? null;
+  const usaInflationItem = inflationItems.find((item) => item.id.includes("us")) ?? null;
+  const selectedRangeSeries = inflationSeriesByRange[inflationRange];
+  const swedenInflationPoints = swedenInflationItem
+    ? selectedRangeSeries[swedenInflationItem.id] ?? swedenInflationItem.sparkline
+    : [];
+  const usaInflationPoints = usaInflationItem ? selectedRangeSeries[usaInflationItem.id] ?? usaInflationItem.sparkline : [];
 
   const selectedChart =
     filteredInflationItems.find((item) => item.id === selectedChartId) ?? filteredInflationItems[0] ?? null;
@@ -327,27 +378,42 @@ export function DashboardView({ commodities, mag7, inflation, warnings }: Dashbo
         <section className="mt-8">
           <div className="flex items-center justify-between">
             <h2 className="section-title text-2xl">Inflation: Sverige & USA</h2>
-            <span className="kpi-subtle">Samma yta som Råvaror/Mag 7</span>
+            <span className="kpi-subtle">Gemensam graf</span>
           </div>
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            {filteredInflationItems.map((item) => (
-              <article key={item.id} data-testid={`inflation-card-${item.id}`} className="card-surface p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold">{inflationRole(item)}</div>
-                    <div className="text-xs kpi-subtle">{item.name}</div>
-                  </div>
-                  <span className="badge">{item.is_stale ? "Stale" : "Live"}</span>
-                </div>
-                <div className="mt-4 text-3xl font-semibold">{formatValue(item.last)}</div>
-                <div className="mt-1 text-sm text-[#6b625a]">{formatPercent(item.y1_pct)} senaste 12 månaderna</div>
-                <Sparkline points={item.sparkline} />
-              </article>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {inflationRanges.map((rangeOption) => (
+              <button
+                key={`inflation-range-${rangeOption.id}`}
+                className="tab-pill"
+                data-active={inflationRange === rangeOption.id}
+                onClick={() => setInflationRange(rangeOption.id)}
+              >
+                {rangeOption.label}
+              </button>
             ))}
           </div>
-          {filteredInflationItems.length === 0 ? (
+          {swedenInflationItem && usaInflationItem ? (
+            <article className="card-surface mt-4 p-5" data-testid="inflation-shared-chart-panel">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm text-[#6b625a]">
+                  Senast: Sverige {formatValue(swedenInflationItem.last)} / USA {formatValue(usaInflationItem.last)}
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-[#1b2a41]" />
+                    Sverige
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-[#f28f3b]" />
+                    USA
+                  </span>
+                </div>
+              </div>
+              <InflationComparisonChart swedenPoints={swedenInflationPoints} usaPoints={usaInflationPoints} />
+            </article>
+          ) : (
             <div className="card-surface mt-4 p-5 text-sm text-[#6b625a]">Ingen inflationsdata tillgänglig.</div>
-          ) : null}
+          )}
         </section>
       ) : null}
 
