@@ -151,12 +151,12 @@ test("filters items based on search input", () => {
   expect(screen.queryByText("Brentolja")).not.toBeInTheDocument();
 });
 
-test("sorts Mag7 by YTD when toggle is clicked", () => {
+test("sorts Mag7 table with sort controls", () => {
   const mag7 = {
     ...summary,
     items: [
-      { ...summary.items[0], id: "aapl", name: "Apple", ytd_pct: 2.0 },
-      { ...summary.items[0], id: "nvda", name: "Nvidia", ytd_pct: 9.0 },
+      { ...summary.items[0], id: "aapl", name: "Apple", ytd_pct: 2.0, last: 190.0 },
+      { ...summary.items[0], id: "nvda", name: "Nvidia", ytd_pct: 9.0, last: 120.0 },
     ],
   };
   render(
@@ -168,14 +168,18 @@ test("sorts Mag7 by YTD when toggle is clicked", () => {
       warnings={[]}
     />,
   );
-  let mag7Rows = screen.getAllByTestId(/^mag7-row-/);
-  expect(mag7Rows[0]).toHaveAttribute("data-testid", "mag7-row-nvda");
-  fireEvent.click(screen.getByRole("button", { name: /Sortera YTD/i }));
-  mag7Rows = screen.getAllByTestId(/^mag7-row-/);
-  expect(mag7Rows[0]).toHaveAttribute("data-testid", "mag7-row-aapl");
+  fireEvent.click(screen.getByRole("button", { name: "Mag 7" }));
+  let rows = screen.getAllByTestId(/^table-row-/);
+  expect(rows[0]).toHaveAttribute("data-testid", "table-row-nvda");
+  fireEvent.change(screen.getByLabelText("Sortera Mag7 efter"), { target: { value: "last" } });
+  rows = screen.getAllByTestId(/^table-row-/);
+  expect(rows[0]).toHaveAttribute("data-testid", "table-row-aapl");
+  fireEvent.click(screen.getByRole("button", { name: "Fallande" }));
+  rows = screen.getAllByTestId(/^table-row-/);
+  expect(rows[0]).toHaveAttribute("data-testid", "table-row-nvda");
 });
 
-test("shows top 6 Mag7 companies in KPI cards when Mag 7 tab is selected", () => {
+test("Mag 7 tab shows top 6 cards, selected chart and table", () => {
   const mag7 = {
     ...summary,
     items: [
@@ -199,7 +203,9 @@ test("shows top 6 Mag7 companies in KPI cards when Mag 7 tab is selected", () =>
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Mag 7" }));
-
+  expect(screen.getByText("MAG 7")).toBeInTheDocument();
+  expect(screen.getByText("Magnificent 7")).toBeInTheDocument();
+  expect(screen.getByTestId("selected-market-chart-panel")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-msft")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-nvda")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-aapl")).toBeInTheDocument();

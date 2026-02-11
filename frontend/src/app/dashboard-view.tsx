@@ -71,12 +71,20 @@ function matchesSearch(item: SummaryItem, query: string): boolean {
   return item.name.toLowerCase().includes(trimmed) || item.id.toLowerCase().includes(trimmed);
 }
 
-function sortMag7ByYtd(items: SummaryItem[], direction: "asc" | "desc"): SummaryItem[] {
+type Mag7SortField = "name" | "last" | "day_pct" | "w1_pct" | "ytd_pct" | "y1_pct";
+
+function sortMag7Items(items: SummaryItem[], field: Mag7SortField, direction: "asc" | "desc"): SummaryItem[] {
   const sorted = [...items];
   sorted.sort((a, b) => {
-    const ay = a.ytd_pct ?? Number.NEGATIVE_INFINITY;
-    const by = b.ytd_pct ?? Number.NEGATIVE_INFINITY;
-    return direction === "desc" ? by - ay : ay - by;
+    if (field === "name") {
+      return direction === "desc"
+        ? b.name.localeCompare(a.name, "sv")
+        : a.name.localeCompare(b.name, "sv");
+    }
+
+    const av = a[field] ?? Number.NEGATIVE_INFINITY;
+    const bv = b[field] ?? Number.NEGATIVE_INFINITY;
+    return direction === "desc" ? bv - av : av - bv;
   });
   return sorted;
 }
@@ -119,27 +127,66 @@ function sortCommoditiesForDisplay(items: SummaryItem[]): SummaryItem[] {
   });
 }
 
-function Sparkline({ points }: { points: { t: string; v: number }[] }) {
+function formatXAxisTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.valueOf())) return "--";
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${month}`;
+}
+
+function Sparkline({
+  points,
+  heightClass = "h-20",
+  showXAxis = false,
+}: {
+  points: { t: string; v: number }[];
+  heightClass?: string;
+  showXAxis?: boolean;
+}) {
   if (points.length < 2) {
-    return <div className="mt-4 h-20 rounded-xl bg-[linear-gradient(90deg,#1b2a41,transparent)] opacity-20" />;
+    return <div className={`mt-4 ${heightClass} rounded-xl bg-[linear-gradient(90deg,#1b2a41,transparent)] opacity-20`} />;
   }
 
   const values = points.map((p) => p.v);
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
+  const chartTop = 8;
+  const chartBottom = showXAxis ? 78 : 100;
+  const chartHeight = chartBottom - chartTop;
   const path = points
     .map((point, index) => {
       const x = (index / (points.length - 1)) * 100;
-      const y = 100 - ((point.v - min) / range) * 100;
+      const y = chartBottom - ((point.v - min) / range) * chartHeight;
       return `${x},${y}`;
     })
     .join(" ");
 
+  const tickIndexes = Array.from(new Set([0, Math.floor((points.length - 1) / 2), points.length - 1]));
+  const tickLabels = tickIndexes.map((tickIndex) => formatXAxisTime(points[tickIndex]?.t ?? ""));
+
   return (
-    <svg className="mt-4 h-20 w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <polyline fill="none" stroke="#1b2a41" strokeWidth="2" points={path} />
-    </svg>
+    <div className="mt-4">
+      <svg className={`${heightClass} w-full`} viewBox="0 0 100 100" preserveAspectRatio="none">
+        <polyline fill="none" stroke="#1b2a41" strokeWidth="2" points={path} />
+        {showXAxis ? (
+          <>
+            <line x1="0" y1={chartBottom} x2="100" y2={chartBottom} stroke="#d4cbc1" strokeWidth="0.6" />
+            {tickIndexes.map((tickIndex) => {
+              const x = points.length === 1 ? 50 : (tickIndex / (points.length - 1)) * 100;
+              return <line key={`spark-tick-${tickIndex}`} x1={x} y1={chartBottom} x2={x} y2={chartBottom + 2} stroke="#8a8076" strokeWidth="0.5" />;
+            })}
+          </>
+        ) : null}
+      </svg>
+      {showXAxis ? (
+        <div className="mt-1 flex items-center justify-between px-1 text-sm font-semibold leading-none text-[#5a524a]">
+          <span>{tickLabels[0]}</span>
+          <span>{tickLabels[1]}</span>
+          <span>{tickLabels[2]}</span>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -169,12 +216,22 @@ function InflationComparisonChart({
   const range = max - min || 1;
   const swedenPath = buildPath(swedenPoints, min, range);
   const usaPath = buildPath(usaPoints, min, range);
+  const basePoints = swedenPoints.length >= usaPoints.length ? swedenPoints : usaPoints;
+  const tickIndexes = Array.from(new Set([0, Math.floor((basePoints.length - 1) / 2), basePoints.length - 1]));
+  const tickLabels = tickIndexes.map((tickIndex) => formatXAxisTime(basePoints[tickIndex]?.t ?? ""));
 
   return (
-    <svg className="mt-4 h-64 w-full" viewBox="0 0 100 100" preserveAspectRatio="none" data-testid="inflation-comparison-chart">
-      <polyline fill="none" stroke="#1b2a41" strokeWidth="2.6" points={swedenPath} data-testid="inflation-line-sweden" />
-      <polyline fill="none" stroke="#f28f3b" strokeWidth="2.6" points={usaPath} data-testid="inflation-line-usa" />
-    </svg>
+    <div className="mt-4">
+      <svg className="h-64 w-full" viewBox="0 0 100 100" preserveAspectRatio="none" data-testid="inflation-comparison-chart">
+        <polyline fill="none" stroke="#1b2a41" strokeWidth="2.6" points={swedenPath} data-testid="inflation-line-sweden" />
+        <polyline fill="none" stroke="#f28f3b" strokeWidth="2.6" points={usaPath} data-testid="inflation-line-usa" />
+      </svg>
+      <div className="mt-1 flex items-center justify-between px-1 text-sm font-semibold leading-none text-[#5a524a]">
+        <span>{tickLabels[0]}</span>
+        <span>{tickLabels[1]}</span>
+        <span>{tickLabels[2]}</span>
+      </div>
+    </div>
   );
 }
 
@@ -192,6 +249,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>("commodities");
   const [searchQuery, setSearchQuery] = useState("");
+  const [mag7SortField, setMag7SortField] = useState<Mag7SortField>("ytd_pct");
   const [mag7SortDirection, setMag7SortDirection] = useState<"asc" | "desc">("desc");
   const [selectedMarketChartId, setSelectedMarketChartId] = useState<string | null>(null);
   const [inflationRange, setInflationRange] = useState<InflationRange>("1y");
@@ -233,8 +291,9 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
   const filteredCommodityItems = sortCommoditiesForDisplay(
     commodityItems.filter((item) => matchesSearch(item, searchQuery)),
   );
-  const filteredMag7Items = sortMag7ByYtd(
+  const filteredMag7Items = sortMag7Items(
     mag7Items.filter((item) => matchesSearch(item, searchQuery)),
+    mag7SortField,
     mag7SortDirection,
   );
 
@@ -247,17 +306,16 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
   const usaInflationPoints = usaInflationItem ? selectedRangeSeries[usaInflationItem.id] ?? usaInflationItem.sparkline : [];
 
   const showMarketSections = activeTab === "commodities" || activeTab === "mag7";
+  const showMag7Table = activeTab === "mag7";
   const showInflation = activeTab === "inflation";
 
-  const kpiItems = activeTab === "mag7" ? topMag7Cards(filteredMag7Items) : filteredCommodityItems;
-  const kpiTitle = activeTab === "mag7" ? "Mag 7" : "Ravaror";
-  const kpiEmptyText =
-    activeTab === "mag7" ? "Ingen Mag 7-data tillganglig." : "Ingen ravarudata tillganglig.";
-  const tableItems = activeTab === "mag7" ? filteredMag7Items : filteredCommodityItems;
-  const tableLabel = activeTab === "mag7" ? "MAG 7" : "RAVAROR";
-  const tableFirstColumn = activeTab === "mag7" ? "Bolag" : "Ravara";
-  const tableEmptyText =
-    activeTab === "mag7" ? "Data kunde inte laddas for Mag 7." : "Data kunde inte laddas for ravaror.";
+  const kpiItems = showMag7Table ? topMag7Cards(filteredMag7Items) : filteredCommodityItems;
+  const kpiTitle = showMag7Table ? "Magnificent 7" : "Ravaror";
+  const kpiEmptyText = showMag7Table ? "Ingen Mag 7-data tillganglig." : "Ingen ravarudata tillganglig.";
+  const tableItems = showMag7Table ? filteredMag7Items : filteredCommodityItems;
+  const tableLabel = showMag7Table ? "MAG 7" : "RAVAROR";
+  const tableFirstColumn = showMag7Table ? "Bolag" : "Ravara";
+  const tableEmptyText = showMag7Table ? "Data kunde inte laddas for Mag 7." : "Data kunde inte laddas for ravaror.";
   const selectedMarketChart = kpiItems.find((item) => item.id === selectedMarketChartId) ?? kpiItems[0] ?? null;
 
   useEffect(() => {
@@ -401,17 +459,48 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
                 <div className="mt-4 text-sm text-[#6b625a]">
                   Senast: {formatValue(selectedMarketChart.last)} ({formatPercent(selectedMarketChart.day_pct)})
                 </div>
-                <Sparkline points={selectedMarketChart.sparkline} />
+                <Sparkline points={selectedMarketChart.sparkline} heightClass="h-56" showXAxis />
               </article>
             ) : (
               <div className="card-surface mt-4 p-5 text-sm text-[#6b625a]">Ingen grafdata tillgänglig.</div>
             )}
           </section>
+        </>
+      ) : null}
 
+      {showMarketSections ? (
+        <>
           <section className="mt-10">
             <div className="flex items-center justify-between">
               <h2 className="section-title text-2xl">Tabell</h2>
-              <span className="kpi-subtle">{tableLabel}</span>
+              <div className="flex items-center gap-2">
+                <span className="kpi-subtle">{tableLabel}</span>
+                {showMag7Table ? (
+                  <>
+                    <label className="sr-only" htmlFor="mag7-sort-field">Sortera Mag7 efter</label>
+                    <select
+                      id="mag7-sort-field"
+                      className="rounded-full border border-[var(--border)] bg-white px-3 py-1 text-xs"
+                      value={mag7SortField}
+                      onChange={(event) => setMag7SortField(event.target.value as Mag7SortField)}
+                    >
+                      <option value="ytd_pct">I ar</option>
+                      <option value="w1_pct">1V</option>
+                      <option value="y1_pct">1 ar</option>
+                      <option value="day_pct">Dags%</option>
+                      <option value="last">Senast</option>
+                      <option value="name">Namn</option>
+                    </select>
+                    <button
+                      className="tab-pill"
+                      data-active="false"
+                      onClick={() => setMag7SortDirection((current) => (current === "desc" ? "asc" : "desc"))}
+                    >
+                      {mag7SortDirection === "desc" ? "Fallande" : "Stigande"}
+                    </button>
+                  </>
+                ) : null}
+              </div>
             </div>
             <div className="mt-4 table-shell">
               <div className="table-head grid grid-cols-7 gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#534a42]">
@@ -489,40 +578,6 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
           )}
         </section>
       ) : null}
-
-      <section className="mt-10 card-surface p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="section-title text-2xl">Mag 7</h2>
-          <button
-            className="tab-pill"
-            data-active="false"
-            onClick={() => setMag7SortDirection((current) => (current === "desc" ? "asc" : "desc"))}
-          >
-            Sortera YTD {mag7SortDirection === "desc" ? "↓" : "↑"}
-          </button>
-        </div>
-        {filteredMag7Items.length > 0 ? (
-          <div className="mt-4 space-y-3">
-            {filteredMag7Items.map((item) => (
-              <div
-                key={`mag7-${item.id}`}
-                data-testid={`mag7-row-${item.id}`}
-                className="flex items-center justify-between border-b border-[var(--border)] pb-3 text-sm"
-              >
-                <span>
-                  {item.name} ({item.id.toUpperCase()})
-                </span>
-                <span>
-                  {formatValue(item.last)} / {formatPercent(item.ytd_pct)}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-2 text-sm text-[#6b625a]">Mag 7-data kunde inte laddas.</p>
-        )}
-        <p className="mt-3 text-xs text-[#6b625a]">Auto-refresh: 60 sekunder.</p>
-      </section>
     </main>
   );
 }
