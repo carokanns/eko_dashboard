@@ -65,12 +65,6 @@ function statusLabel(status: ModuleStatus): string {
   return "Offline";
 }
 
-function matchesSearch(item: SummaryItem, query: string): boolean {
-  const trimmed = query.trim().toLowerCase();
-  if (!trimmed) return true;
-  return item.name.toLowerCase().includes(trimmed) || item.id.toLowerCase().includes(trimmed);
-}
-
 type Mag7SortField = "name" | "last" | "day_pct" | "w1_pct" | "ytd_pct" | "y1_pct";
 
 function sortMag7Items(items: SummaryItem[], field: Mag7SortField, direction: "asc" | "desc"): SummaryItem[] {
@@ -248,7 +242,6 @@ function sourceDisplayName(source: string): string {
 export function DashboardView({ commodities, mag7, inflation, inflationSeriesByRange, warnings }: DashboardViewProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>("commodities");
-  const [searchQuery, setSearchQuery] = useState("");
   const [mag7SortField, setMag7SortField] = useState<Mag7SortField>("ytd_pct");
   const [mag7SortDirection, setMag7SortDirection] = useState<"asc" | "desc">("desc");
   const [selectedMarketChartId, setSelectedMarketChartId] = useState<string | null>(null);
@@ -268,16 +261,6 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
   const commodityStatus = getModuleStatus(commodityItems);
   const mag7Status = getModuleStatus(mag7Items);
   const inflationStatus = getModuleStatus(inflationItems);
-  const dashboardStatus: ModuleStatus = warnings.length > 0
-    ? "partial"
-    : [commodityStatus, mag7Status, inflationStatus].every((status) => status === "offline")
-      ? "offline"
-      : [commodityStatus, mag7Status, inflationStatus].every((status) => status === "fresh")
-        ? "fresh"
-        : [commodityStatus, mag7Status, inflationStatus].every((status) => status === "stale")
-          ? "stale"
-          : "partial";
-
   const latestUpdate = commodities?.meta.fetched_at ?? mag7?.meta.fetched_at ?? inflation?.meta.fetched_at;
   const sourceNames = Array.from(
     new Set(
@@ -288,11 +271,9 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
   );
   const sourceLabel = sourceNames.length > 0 ? sourceNames.join(" + ") : "--";
 
-  const filteredCommodityItems = sortCommoditiesForDisplay(
-    commodityItems.filter((item) => matchesSearch(item, searchQuery)),
-  );
+  const filteredCommodityItems = sortCommoditiesForDisplay(commodityItems);
   const filteredMag7Items = sortMag7Items(
-    mag7Items.filter((item) => matchesSearch(item, searchQuery)),
+    mag7Items,
     mag7SortField,
     mag7SortDirection,
   );
@@ -310,7 +291,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
   const showInflation = activeTab === "inflation";
 
   const kpiItems = showMag7Table ? topMag7Cards(filteredMag7Items) : filteredCommodityItems;
-  const kpiTitle = showMag7Table ? "Magnificent 7" : "Ravaror";
+  const kpiTitle = showMag7Table ? "Magnificent 7" : "Råvaror";
   const kpiEmptyText = showMag7Table ? "Ingen Mag 7-data tillganglig." : "Ingen ravarudata tillganglig.";
   const tableItems = showMag7Table ? filteredMag7Items : filteredCommodityItems;
   const tableLabel = showMag7Table ? "MAG 7" : "RAVAROR";
@@ -333,8 +314,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
     <main className="container-shell">
       <header className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-2">
-          <div className="badge w-fit">Finansiell Dashboard</div>
-          <h1 className="section-title text-4xl font-semibold">Marknadsoversikt</h1>
+          <h1 className="section-title text-4xl font-semibold">Marknadsöversikt</h1>
           <p className="text-sm text-[#5a524a]">
             Snabba KPI:er, tabeller och sparklines med flera datakällor (MVP).
           </p>
@@ -349,18 +329,9 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
               <div className="text-xs text-[#6b625a]">Datakallor: {sourceLabel}</div>
             </div>
           </div>
-          <div className="flex-1">
-            <input
-              className="w-full rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm"
-              placeholder={`Sok i ${activeTab === "mag7" ? "Mag 7" : activeTab === "inflation" ? "inflation" : "ravaror"}`}
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
-          </div>
-          <div className="flex items-center gap-2 text-xs text-[#6b625a]">
+          <div className="flex items-center gap-2 text-xs text-[#6b625a] md:ml-auto">
             <span>Senast lyckade uppdatering</span>
             <span className="font-semibold text-[#2f2720]">{formatUpdateTime(latestUpdate)}</span>
-            <span className="badge">{statusLabel(dashboardStatus)}</span>
           </div>
         </div>
       </header>
@@ -371,26 +342,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
         </section>
       ) : null}
 
-      <section className="mt-6 grid gap-3 md:grid-cols-4">
-        <div className="card-surface p-3 text-sm">
-          <div className="kpi-subtle">Dashboard status</div>
-          <div className="mt-1 font-semibold">{statusLabel(dashboardStatus)}</div>
-        </div>
-        <div className="card-surface p-3 text-sm">
-          <div className="kpi-subtle">Råvaror</div>
-          <div className="mt-1 font-semibold">{statusLabel(commodityStatus)}</div>
-        </div>
-        <div className="card-surface p-3 text-sm">
-          <div className="kpi-subtle">Mag 7</div>
-          <div className="mt-1 font-semibold">{statusLabel(mag7Status)}</div>
-        </div>
-        <div className="card-surface p-3 text-sm">
-          <div className="kpi-subtle">Inflation</div>
-          <div className="mt-1 font-semibold">{statusLabel(inflationStatus)}</div>
-        </div>
-      </section>
-
-      <section className="mt-10 card-surface p-4">
+      <section className="mt-6 card-surface p-4">
         <div className="flex flex-wrap gap-2">
           {tabs.map((tab) => (
             <button
@@ -402,6 +354,11 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
               {tab.label}
             </button>
           ))}
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <span className="badge">Råvaror: {statusLabel(commodityStatus)}</span>
+          <span className="badge">Mag 7: {statusLabel(mag7Status)}</span>
+          <span className="badge">Inflation: {statusLabel(inflationStatus)}</span>
         </div>
       </section>
 

@@ -60,10 +60,10 @@ test("renders dashboard with live values", () => {
       warnings={[]}
     />,
   );
-  expect(screen.getByText("Marknadsoversikt")).toBeInTheDocument();
+  expect(screen.getByText("Marknadsöversikt")).toBeInTheDocument();
   expect(screen.getAllByText("Brentolja").length).toBeGreaterThan(0);
   expect(screen.getAllByText("82.50").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("Fresh")[0]).toBeInTheDocument();
+  expect(screen.getByText("Råvaror: Fresh")).toBeInTheDocument();
 });
 
 test("renders stale indicator and warning fallback", () => {
@@ -77,8 +77,9 @@ test("renders stale indicator and warning fallback", () => {
     />,
   );
   expect(screen.getByText("Kunde inte hamta ravaror just nu.")).toBeInTheDocument();
-  expect(screen.getAllByText("Partial").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("Offline").length).toBeGreaterThan(0);
+  expect(screen.getByText("Råvaror: Offline")).toBeInTheDocument();
+  expect(screen.getByText("Mag 7: Offline")).toBeInTheDocument();
+  expect(screen.getByText("Inflation: Offline")).toBeInTheDocument();
   expect(screen.getByText("Ingen ravarudata tillganglig.")).toBeInTheDocument();
 });
 
@@ -125,30 +126,21 @@ test("handles cached and invalid fetched_at without crashing", () => {
   expect(screen.getAllByText("--:--").length).toBeGreaterThan(0);
 });
 
-test("filters items based on search input", () => {
-  const commodities = {
-    ...summary,
-    items: [
-      summary.items[0],
-      {
-        ...summary.items[0],
-        id: "gold",
-        name: "Guld",
-      },
-    ],
-  };
+test("removes search box and shows status badges under tabs", () => {
   render(
     <DashboardView
-      commodities={commodities}
-      mag7={null}
-      inflation={null}
+      commodities={summary}
+      mag7={summary}
+      inflation={summary}
       inflationSeriesByRange={inflationSeriesByRange}
       warnings={[]}
     />,
   );
-  fireEvent.change(screen.getAllByPlaceholderText("Sok i ravaror")[0], { target: { value: "guld" } });
-  expect(screen.getAllByText("Guld").length).toBeGreaterThan(0);
-  expect(screen.queryByText("Brentolja")).not.toBeInTheDocument();
+
+  expect(screen.queryByPlaceholderText(/Sok i/i)).not.toBeInTheDocument();
+  expect(screen.getByText("Råvaror: Fresh")).toBeInTheDocument();
+  expect(screen.getByText("Mag 7: Fresh")).toBeInTheDocument();
+  expect(screen.getByText("Inflation: Fresh")).toBeInTheDocument();
 });
 
 test("sorts Mag7 table with sort controls", () => {
