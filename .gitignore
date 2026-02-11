@@ -22,10 +22,30 @@ backend/.pytest_cache/
 .run/
 backend/.run/
 frontend/.run/
+*.log
+*.pid
+*.tmp
 
 # OS
 .DS_Store
+Thumbs.db
 
 # Editors
 .vscode
 .idea
+*.swp
+*.swo
+
+# Coverage / caches
+.coverage
+.coverage.*
+coverage/
+**/htmlcov/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Local database artifacts (SQLite)
+*.sqlite
+*.sqlite3
+*.db
