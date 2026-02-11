@@ -418,7 +418,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
                   key={item.id}
                   type="button"
                   data-testid={`kpi-card-${item.id}`}
-                  className="card-surface commodity-card p-5 text-left transition-transform hover:-translate-y-0.5"
+                  className="card-surface commodity-card kpi-card-80 p-4 text-left transition-transform hover:-translate-y-0.5"
                   data-active={selectedMarketChart?.id === item.id}
                   onClick={() => setSelectedMarketChartId(item.id)}
                 >
@@ -429,9 +429,9 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
                     </div>
                     <span className="badge">{item.is_stale ? "Stale" : "Live"}</span>
                   </div>
-                  <div className="mt-6 kpi-value">{formatValue(item.last)}</div>
+                  <div className="mt-5 kpi-value">{formatValue(item.last)}</div>
                   <div className="mt-2 text-sm kpi-change">{formatPercent(item.day_pct)}</div>
-                  <Sparkline points={item.sparkline} />
+                  <Sparkline points={item.sparkline} heightClass="h-16" />
                 </button>
               ))}
               {kpiItems.length === 0 ? (

@@ -94,6 +94,10 @@ body {
   font-weight: 600;
 }
 
+.kpi-card-80 .kpi-value {
+  font-size: 26px;
+}
+
 .kpi-subtle {
   color: #6b625a;
   font-size: 13px;
