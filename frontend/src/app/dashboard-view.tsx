@@ -71,7 +71,7 @@ function formatUpdateTime(timestamp: string | undefined): string {
   return date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
 }
 
-function formatTimestampCell(timestamp: string | undefined): string {
+function formatTimestampCell(timestamp: string | null | undefined): string {
   if (!timestamp) return "--";
   const date = new Date(timestamp);
   if (Number.isNaN(date.valueOf())) return "--";
