@@ -12,4 +12,4 @@ else
   PYTHON_BIN="python"
 fi
 
-exec "$PYTHON_BIN" -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+exec env PYTHONFAULTHANDLER=1 "$PYTHON_BIN" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --log-level warning --no-access-log
