@@ -23,6 +23,7 @@ type DashboardViewProps = {
 
 type ModuleStatus = "fresh" | "partial" | "stale" | "offline";
 type InflationRange = "3m" | "6m" | "1y";
+type Theme = "light" | "dark";
 
 const inflationRanges: Array<{ id: InflationRange; label: string }> = [
   { id: "1y", label: "12 man" },
@@ -41,6 +42,13 @@ function formatPercent(value: number | null): string {
   if (value === null) return "--";
   const sign = value > 0 ? "+" : "";
   return `${sign}${value.toFixed(2)}%`;
+}
+
+function changeToneClass(value: number | null): string {
+  if (value === null) return "change-neutral";
+  if (value > 0) return "change-positive";
+  if (value < 0) return "change-negative";
+  return "change-neutral";
 }
 
 function formatUpdateTime(timestamp: string | undefined): string {
@@ -138,7 +146,7 @@ function Sparkline({
   showXAxis?: boolean;
 }) {
   if (points.length < 2) {
-    return <div className={`mt-4 ${heightClass} rounded-xl bg-[linear-gradient(90deg,#1b2a41,transparent)] opacity-20`} />;
+    return <div className={`mt-4 ${heightClass} rounded-xl chart-empty`} />;
   }
 
   const values = points.map((p) => p.v);
@@ -162,19 +170,19 @@ function Sparkline({
   return (
     <div className="mt-4">
       <svg className={`${heightClass} w-full`} viewBox="0 0 100 100" preserveAspectRatio="none">
-        <polyline fill="none" stroke="#1b2a41" strokeWidth="2" points={path} />
+        <polyline fill="none" stroke="var(--chart-primary)" strokeWidth="2" points={path} />
         {showXAxis ? (
           <>
-            <line x1="0" y1={chartBottom} x2="100" y2={chartBottom} stroke="#d4cbc1" strokeWidth="0.6" />
+            <line x1="0" y1={chartBottom} x2="100" y2={chartBottom} stroke="var(--chart-grid)" strokeWidth="0.6" />
             {tickIndexes.map((tickIndex) => {
               const x = points.length === 1 ? 50 : (tickIndex / (points.length - 1)) * 100;
-              return <line key={`spark-tick-${tickIndex}`} x1={x} y1={chartBottom} x2={x} y2={chartBottom + 2} stroke="#8a8076" strokeWidth="0.5" />;
+              return <line key={`spark-tick-${tickIndex}`} x1={x} y1={chartBottom} x2={x} y2={chartBottom + 2} stroke="var(--chart-axis)" strokeWidth="0.5" />;
             })}
           </>
         ) : null}
       </svg>
       {showXAxis ? (
-        <div className="mt-1 flex items-center justify-between px-1 text-sm font-semibold leading-none text-[#5a524a]">
+        <div className="axis-text mt-1 flex items-center justify-between px-1 text-sm font-semibold leading-none">
           <span>{tickLabels[0]}</span>
           <span>{tickLabels[1]}</span>
           <span>{tickLabels[2]}</span>
@@ -202,7 +210,7 @@ function InflationComparisonChart({
 
   const values = [...swedenPoints, ...usaPoints].map((point) => point.v);
   if (values.length < 2) {
-    return <div className="mt-4 h-64 rounded-xl bg-[linear-gradient(90deg,#1b2a41,transparent)] opacity-20" />;
+    return <div className="chart-empty mt-4 h-64 rounded-xl" />;
   }
 
   const min = Math.min(...values);
@@ -217,10 +225,10 @@ function InflationComparisonChart({
   return (
     <div className="mt-4">
       <svg className="h-64 w-full" viewBox="0 0 100 100" preserveAspectRatio="none" data-testid="inflation-comparison-chart">
-        <polyline fill="none" stroke="#1b2a41" strokeWidth="2.6" points={swedenPath} data-testid="inflation-line-sweden" />
-        <polyline fill="none" stroke="#f28f3b" strokeWidth="2.6" points={usaPath} data-testid="inflation-line-usa" />
+        <polyline fill="none" stroke="var(--chart-primary)" strokeWidth="2.6" points={swedenPath} data-testid="inflation-line-sweden" />
+        <polyline fill="none" stroke="var(--chart-secondary)" strokeWidth="2.6" points={usaPath} data-testid="inflation-line-usa" />
       </svg>
-      <div className="mt-1 flex items-center justify-between px-1 text-sm font-semibold leading-none text-[#5a524a]">
+      <div className="axis-text mt-1 flex items-center justify-between px-1 text-sm font-semibold leading-none">
         <span>{tickLabels[0]}</span>
         <span>{tickLabels[1]}</span>
         <span>{tickLabels[2]}</span>
@@ -241,6 +249,7 @@ function sourceDisplayName(source: string): string {
 
 export function DashboardView({ commodities, mag7, inflation, inflationSeriesByRange, warnings }: DashboardViewProps) {
   const router = useRouter();
+  const [theme, setTheme] = useState<Theme>("light");
   const [activeTab, setActiveTab] = useState<TabId>("commodities");
   const [mag7SortField, setMag7SortField] = useState<Mag7SortField>("ytd_pct");
   const [mag7SortDirection, setMag7SortDirection] = useState<"asc" | "desc">("desc");
@@ -253,6 +262,22 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
     }, 60_000);
     return () => clearInterval(timer);
   }, [router]);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("dashboard-theme");
+    if (savedTheme === "light" || savedTheme === "dark") {
+      setTheme(savedTheme);
+      return;
+    }
+    if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      setTheme("dark");
+    }
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    window.localStorage.setItem("dashboard-theme", theme);
+  }, [theme]);
 
   const commodityItems = commodities?.items ?? EMPTY_ITEMS;
   const mag7Items = mag7?.items ?? EMPTY_ITEMS;
@@ -315,7 +340,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
       <header className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-2">
           <h1 className="section-title text-4xl font-semibold">Marknadsöversikt</h1>
-          <p className="text-sm text-[#5a524a]">
+          <p className="text-muted text-sm">
             Snabba KPI:er, tabeller och sparklines med flera datakällor (MVP).
           </p>
         </div>
@@ -326,18 +351,28 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
             </div>
             <div>
               <div className="text-sm font-semibold">Ekonomi Dashboard</div>
-              <div className="text-xs text-[#6b625a]">Datakallor: {sourceLabel}</div>
+              <div className="text-muted text-xs">Datakallor: {sourceLabel}</div>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs text-[#6b625a] md:ml-auto">
+          <div className="text-muted flex items-center gap-2 text-xs md:ml-auto">
             <span>Senast lyckade uppdatering</span>
-            <span className="font-semibold text-[#2f2720]">{formatUpdateTime(latestUpdate)}</span>
+            <span className="text-strong font-semibold">{formatUpdateTime(latestUpdate)}</span>
+          </div>
+          <div className="md:ml-2">
+            <button
+              type="button"
+              className="theme-toggle"
+              data-theme={theme}
+              onClick={() => setTheme((current) => (current === "light" ? "dark" : "light"))}
+            >
+              {theme === "light" ? "Morkt lage" : "Ljust lage"}
+            </button>
           </div>
         </div>
       </header>
 
       {warnings.length > 0 ? (
-        <section className="mt-6 rounded-xl border border-[#d4b8ab] bg-[#fff4ef] p-3 text-sm text-[#7b3f2e]">
+        <section className="warning-surface mt-6 rounded-xl border p-3 text-sm">
           {warnings.join(" ")}
         </section>
       ) : null}
@@ -367,7 +402,6 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
           <section className="mt-8">
             <div className="flex items-center justify-between">
               <h2 className="section-title text-2xl">{kpiTitle}</h2>
-              <span className="kpi-subtle">KPI-kort</span>
             </div>
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {kpiItems.map((item) => (
@@ -387,12 +421,12 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
                     <span className="badge">{item.is_stale ? "Stale" : "Live"}</span>
                   </div>
                   <div className="mt-5 kpi-value">{formatValue(item.last)}</div>
-                  <div className="mt-2 text-sm kpi-change">{formatPercent(item.day_pct)}</div>
+                  <div className={`mt-2 text-sm kpi-change ${changeToneClass(item.day_pct)}`}>{formatPercent(item.day_pct)}</div>
                   <Sparkline points={item.sparkline} heightClass="h-16" />
                 </button>
               ))}
               {kpiItems.length === 0 ? (
-                <div className="card-surface p-5 text-sm text-[#6b625a]">{kpiEmptyText}</div>
+                <div className="card-surface text-muted p-5 text-sm">{kpiEmptyText}</div>
               ) : null}
             </div>
           </section>
@@ -407,19 +441,20 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-semibold">{selectedMarketChart.name}</h3>
-                    <p className="text-xs text-[#6b625a]">
+                    <p className="text-muted text-xs">
                       {selectedMarketChart.unit ?? "--"} • {selectedMarketChart.price_type ?? "--"}
                     </p>
                   </div>
                   <span className="badge">{selectedMarketChart.is_stale ? "Stale" : "Live"}</span>
                 </div>
-                <div className="mt-4 text-sm text-[#6b625a]">
-                  Senast: {formatValue(selectedMarketChart.last)} ({formatPercent(selectedMarketChart.day_pct)})
+                <div className="text-muted mt-4 text-sm">
+                  Senast: {formatValue(selectedMarketChart.last)} (
+                  <span className={changeToneClass(selectedMarketChart.day_pct)}>{formatPercent(selectedMarketChart.day_pct)}</span>)
                 </div>
                 <Sparkline points={selectedMarketChart.sparkline} heightClass="h-56" showXAxis />
               </article>
             ) : (
-              <div className="card-surface mt-4 p-5 text-sm text-[#6b625a]">Ingen grafdata tillgänglig.</div>
+              <div className="card-surface text-muted mt-4 p-5 text-sm">Ingen grafdata tillgänglig.</div>
             )}
           </section>
         </>
@@ -437,7 +472,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
                     <label className="sr-only" htmlFor="mag7-sort-field">Sortera Mag7 efter</label>
                     <select
                       id="mag7-sort-field"
-                      className="rounded-full border border-[var(--border)] bg-white px-3 py-1 text-xs"
+                      className="select-control rounded-full px-3 py-1 text-xs"
                       value={mag7SortField}
                       onChange={(event) => setMag7SortField(event.target.value as Mag7SortField)}
                     >
@@ -460,7 +495,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
               </div>
             </div>
             <div className="mt-4 table-shell">
-              <div className="table-head grid grid-cols-7 gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[#534a42]">
+              <div className="table-head table-head-text grid grid-cols-7 gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wide">
                 <div>{tableFirstColumn}</div>
                 <div>Senast</div>
                 <div>+/-</div>
@@ -478,15 +513,15 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
                   >
                     <div>{item.name}</div>
                     <div>{formatValue(item.last)}</div>
-                    <div>{formatPercent(item.day_pct)}</div>
-                    <div>{formatPercent(item.w1_pct)}</div>
-                    <div>{formatPercent(item.ytd_pct)}</div>
-                    <div>{formatPercent(item.y1_pct)}</div>
+                    <div className={changeToneClass(item.day_pct)}>{formatPercent(item.day_pct)}</div>
+                    <div className={changeToneClass(item.w1_pct)}>{formatPercent(item.w1_pct)}</div>
+                    <div className={changeToneClass(item.ytd_pct)}>{formatPercent(item.ytd_pct)}</div>
+                    <div className={changeToneClass(item.y1_pct)}>{formatPercent(item.y1_pct)}</div>
                     <div>{item.price_type ?? "--"}</div>
                   </div>
                 ))
               ) : (
-                <div className="px-4 py-6 text-sm text-[#6b625a]">{tableEmptyText}</div>
+                <div className="text-muted px-4 py-6 text-sm">{tableEmptyText}</div>
               )}
             </div>
           </section>
@@ -514,16 +549,16 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
           {swedenInflationItem && usaInflationItem ? (
             <article className="card-surface mt-4 p-5" data-testid="inflation-shared-chart-panel">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="text-sm text-[#6b625a]">
+                <div className="text-muted text-sm">
                   Senast: Sverige {formatValue(swedenInflationItem.last)} / USA {formatValue(usaInflationItem.last)}
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="inline-flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-[#1b2a41]" />
+                    <span className="legend-dot-sweden h-2 w-2 rounded-full" />
                     Sverige
                   </span>
                   <span className="inline-flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-[#f28f3b]" />
+                    <span className="legend-dot-usa h-2 w-2 rounded-full" />
                     USA
                   </span>
                 </div>
@@ -531,7 +566,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
               <InflationComparisonChart swedenPoints={swedenInflationPoints} usaPoints={usaInflationPoints} />
             </article>
           ) : (
-            <div className="card-surface mt-4 p-5 text-sm text-[#6b625a]">Ingen inflationsdata tillgänglig.</div>
+            <div className="card-surface text-muted mt-4 p-5 text-sm">Ingen inflationsdata tillgänglig.</div>
           )}
         </section>
       ) : null}

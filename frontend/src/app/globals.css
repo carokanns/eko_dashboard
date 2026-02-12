@@ -9,6 +9,53 @@
   --accent-2: #2f6f6a;
   --accent-3: #1b2a41;
   --border: #ded6cc;
+  --text-muted: #6b625a;
+  --text-strong: #2f2720;
+  --warning-border: #d4b8ab;
+  --warning-bg: #fff4ef;
+  --warning-text: #7b3f2e;
+  --table-head-text: #534a42;
+  --chart-primary: #1b2a41;
+  --chart-secondary: #f28f3b;
+  --chart-grid: #d4cbc1;
+  --chart-axis: #8a8076;
+  --positive: #1b8f4d;
+  --negative: #bf2e3f;
+  --neutral: #7b746d;
+  --body-bg-1: #fff2df;
+  --body-bg-2: #e0f0ea;
+  --body-bg-3: #f7f4ef;
+  --body-bg-4: #efe8dc;
+  --body-bg-5: #f5f1ea;
+}
+
+[data-theme="dark"] {
+  --background: #14161b;
+  --foreground: #ece8e2;
+  --surface: #1c2028;
+  --surface-muted: #232833;
+  --accent: #ffab5c;
+  --accent-2: #53b88f;
+  --accent-3: #9ec0ff;
+  --border: #323846;
+  --text-muted: #b3bdce;
+  --text-strong: #f3f5f8;
+  --warning-border: #63403a;
+  --warning-bg: #3a2927;
+  --warning-text: #f1c5b8;
+  --table-head-text: #d5dbe6;
+  --chart-primary: #9ec0ff;
+  --chart-secondary: #ffab5c;
+  --chart-grid: #596170;
+  --chart-axis: #8a95a9;
+  --positive: #53d487;
+  --negative: #ff6d7c;
+  --neutral: #a0a8b6;
+  --body-bg-1: #1f2130;
+  --body-bg-2: #16322a;
+  --body-bg-3: #13161b;
+  --body-bg-4: #161b24;
+  --body-bg-5: #12161f;
 }
 
 @theme inline {
@@ -19,9 +66,9 @@
 }
 
 body {
-  background: radial-gradient(1200px 800px at 15% -10%, #fff2df 0%, transparent 60%),
-    radial-gradient(1000px 700px at 90% 0%, #e0f0ea 0%, transparent 55%),
-    linear-gradient(180deg, #f7f4ef 0%, #efe8dc 55%, #f5f1ea 100%);
+  background: radial-gradient(1200px 800px at 15% -10%, var(--body-bg-1) 0%, transparent 60%),
+    radial-gradient(1000px 700px at 90% 0%, var(--body-bg-2) 0%, transparent 55%),
+    linear-gradient(180deg, var(--body-bg-3) 0%, var(--body-bg-4) 55%, var(--body-bg-5) 100%);
   color: var(--foreground);
   font-family: var(--font-sans), "Segoe UI", sans-serif;
   min-height: 100vh;
@@ -33,6 +80,10 @@ body {
 
 ::selection {
   background: rgba(242, 143, 59, 0.25);
+}
+
+[data-theme="dark"] ::selection {
+  background: rgba(158, 192, 255, 0.25);
 }
 
 .container-shell {
@@ -52,6 +103,11 @@ body {
   background: linear-gradient(140deg, #1b2a41 0%, #243a5a 55%, #1b2a41 100%);
   border-color: #1b2a41;
   color: #f5f1ea;
+}
+
+[data-theme="dark"] .commodity-card {
+  background: linear-gradient(140deg, #263147 0%, #364561 55%, #263147 100%);
+  border-color: #465a82;
 }
 
 .commodity-card[data-active="true"] {
@@ -85,7 +141,14 @@ body {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  background: #fff7ec;
+  background: var(--surface-muted);
+  color: var(--text-strong);
+}
+
+[data-theme="dark"] .badge {
+  background: #2b3342;
+  border-color: #465065;
+  color: #edf3ff;
 }
 
 .kpi-value {
@@ -99,14 +162,14 @@ body {
 }
 
 .kpi-subtle {
-  color: #6b625a;
+  color: var(--text-muted);
   font-size: 13px;
   letter-spacing: 0.4px;
   text-transform: uppercase;
 }
 
 .kpi-change {
-  color: #2f6f6a;
+  color: var(--neutral);
 }
 
 .table-shell {
@@ -117,7 +180,7 @@ body {
 }
 
 .table-head {
-  background: #f6f1e9;
+  background: var(--surface-muted);
   border-bottom: 1px solid var(--border);
 }
 
@@ -140,7 +203,82 @@ body {
 
 .tab-pill[data-active="false"] {
   border-color: var(--border);
+  color: var(--text-strong);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-strong {
+  color: var(--text-strong);
+}
+
+.warning-surface {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.table-head-text {
+  color: var(--table-head-text);
+}
+
+.select-control {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+}
+
+.theme-toggle {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-strong);
+  background: var(--surface);
+}
+
+.theme-toggle[data-theme="dark"] {
+  background: #2b3342;
+  color: #ecf2ff;
+}
+
+.theme-toggle[data-theme="light"] {
+  background: #fff7ec;
   color: #2f2720;
+}
+
+.chart-empty {
+  background: linear-gradient(90deg, var(--chart-primary), transparent);
+  opacity: 0.2;
+}
+
+.axis-text {
+  color: var(--text-muted);
+}
+
+.legend-dot-sweden {
+  background: var(--chart-primary);
+}
+
+.legend-dot-usa {
+  background: var(--chart-secondary);
+}
+
+.change-positive {
+  color: var(--positive);
+}
+
+.change-negative {
+  color: var(--negative);
+}
+
+.change-neutral {
+  color: var(--neutral);
 }
 
 @media (max-width: 768px) {

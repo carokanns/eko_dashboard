@@ -63,9 +63,9 @@ Syftet är en finansiell dashboard för flera enheter (laptop/mobil/tablet) med:
 ## Vad som återstår
 
 - Tema-toggle (dark/light) saknas i frontend trots MVP-krav i specen.
-- Svenska talformat enligt spec saknas/är ofullständigt:
-  - decimal-komma
-  - tusentalsavgränsare (mellanslag)
+- Svenska talformat enligt spec är struket som krav.
+  - Punkt som decimaltecken är accepterat.
+  - Tusentalsavgränsare (mellanslag) krävs inte.
 - Färglogik enligt spec (positiv grön, negativ röd) är inte fullt implementerad/verifierad.
 - Råvarutabellen är inte fullt spec-komplett:
   - kolumn `TID` saknas
