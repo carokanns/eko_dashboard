@@ -1,0 +1,12 @@
+.git
+.gitignore
+.run
+**/__pycache__
+**/.pytest_cache
+**/.next
+**/node_modules
+**/.venv
+**/*.pyc
+backend/tests
+frontend/src/test
+frontend/*.log

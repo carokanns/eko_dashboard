@@ -42,6 +42,21 @@ Test:
 - Backend: `cd backend && .venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt && .venv/bin/python -m pytest`
 - Frontend: `cd frontend && npm install && npm run test`
 
+Körning med Docker (rekommenderat på annan Linux-maskin):
+
+1. Bygg och starta:
+- `docker compose up -d --build`
+
+2. Öppna appen:
+- `http://<maskinens-ip>:3000`
+
+3. Stoppa:
+- `docker compose down`
+
+Notering:
+- Frontend exponeras på port `3000`.
+- Backend körs internt i compose-nätet och nås av frontend via `http://backend:8000`.
+
 Körning utan Docker (LAN + Tailscale):
 
 - Backend körs endast lokalt på laptop: `127.0.0.1:8000`

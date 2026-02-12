@@ -51,10 +51,17 @@ Syftet är en finansiell dashboard för flera enheter (laptop/mobil/tablet) med:
   - tabbaserad vy med dynamiskt KPI-/graf-/tabellinnehåll
   - header förenklad (ingen sökruta), rubrik `Marknadsöversikt`
   - status per modul under tabbar
+  - tema-toggle (dark/light)
+  - färglogik enligt spec (positiv grön, negativ röd)
+  - råvarutabell uppdaterad med `TID`, enhet i första kolumnen och tydlig `abs + %` i `+/-`
   - on-demand/LAN-körning med `dev:lan` och `start:lan`
+- Backend:
+  - schemalagd uppdatering var 60:e sekund via bakgrundsjobb
+  - API-anrop använder i första hand förvärmd cache med request-driven fallback vid cache miss
 - Drift:
   - `scripts/run-backend.sh`, `scripts/run-frontend.sh`, `scripts/run-dev.sh`
   - `frontend/.env.example` och `API_BASE_URL` mot intern backend (`127.0.0.1:8000`)
+  - Docker/Compose-upplägg för isolerad körning på annan Linux-maskin
 - Test:
   - backendtester: 15 tester
   - frontendtester: 11 tester
@@ -62,18 +69,9 @@ Syftet är en finansiell dashboard för flera enheter (laptop/mobil/tablet) med:
 
 ## Vad som återstår
 
-- Tema-toggle (dark/light) saknas i frontend trots MVP-krav i specen.
 - Svenska talformat enligt spec är struket som krav.
   - Punkt som decimaltecken är accepterat.
   - Tusentalsavgränsare (mellanslag) krävs inte.
-- Färglogik enligt spec (positiv grön, negativ röd) är inte fullt implementerad/verifierad.
-- Råvarutabellen är uppdaterad enligt spec:
-  - kolumn `TID` finns
-  - enhet visas i första kolumnen
-  - `+/-` visar tydligt `abs + %`
-- Backend har schemalagd uppdatering var 60:e sekund via bakgrundsjobb.
-  - API-anrop använder i första hand förvärmd cache.
-  - Request-driven fallback finns kvar vid cache miss.
 - Stale-threshold enligt spec (t.ex. flagga stale efter längre utebliven uppdatering) saknar explicit implementation.
 - Tidsstämpel i Europe/Stockholm enligt spec saknas som tydlig backendstandard.
 - Skydd mot rate limits är inte fullt utbyggt:
@@ -87,7 +85,6 @@ Syftet är en finansiell dashboard för flera enheter (laptop/mobil/tablet) med:
   - upstream-fel och retry-statistik
 - Auth/rate-limiting saknas om projektet ska öppnas för fler än egna enheter.
 - Eventuell deployment/24-7-host behövs om appen ska vara tillgänglig när laptop är avstängd.
-- Docker-compose-leverabel enligt spec (frontend + backend + db) saknas.
 - TanStack Query (arkitekturval i spec) används inte i nuvarande frontend.
 - README har några formateringsdetaljer att städa (exempelvis `1;`, `2;`, `3;` i körsektionen).
 
@@ -98,4 +95,4 @@ Projektet är i en stabil MVP+ fas:
 - kärnflödet fungerar i produktionlik lokal miljö,
 - testtäckningen är bra för nuvarande scope,
 - funktionerna för Råvaror, Mag7 och Inflation är integrerade i UI,
-men flera krav från originalspecen (tema, format, scheduler, persistent lagring och driftkrav) återstår.
+men flera krav från originalspecen (persistent lagring och driftkrav) återstår.
