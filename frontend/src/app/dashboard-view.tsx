@@ -44,6 +44,19 @@ function formatPercent(value: number | null): string {
   return `${sign}${value.toFixed(2)}%`;
 }
 
+function formatSignedValue(value: number | null, precision = 2): string {
+  if (value === null) return "--";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(precision)}`;
+}
+
+function formatAbsAndPercent(dayAbs: number | null, dayPct: number | null): string {
+  if (dayAbs === null && dayPct === null) return "--";
+  if (dayAbs === null) return formatPercent(dayPct);
+  if (dayPct === null) return formatSignedValue(dayAbs);
+  return `${formatSignedValue(dayAbs)} (${formatPercent(dayPct)})`;
+}
+
 function changeToneClass(value: number | null): string {
   if (value === null) return "change-neutral";
   if (value > 0) return "change-positive";
@@ -55,6 +68,13 @@ function formatUpdateTime(timestamp: string | undefined): string {
   if (!timestamp) return "--:--";
   const date = new Date(timestamp);
   if (Number.isNaN(date.valueOf())) return "--:--";
+  return date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatTimestampCell(timestamp: string | undefined): string {
+  if (!timestamp) return "--";
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.valueOf())) return "--";
   return date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
 }
 
@@ -320,8 +340,9 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
   const kpiEmptyText = showMag7Table ? "Ingen Mag 7-data tillganglig." : "Ingen ravarudata tillganglig.";
   const tableItems = showMag7Table ? filteredMag7Items : filteredCommodityItems;
   const tableLabel = showMag7Table ? "MAG 7" : "RAVAROR";
-  const tableFirstColumn = showMag7Table ? "Bolag" : "Ravara";
+  const tableFirstColumn = showMag7Table ? "Bolag" : "Ravara / Enhet";
   const tableEmptyText = showMag7Table ? "Data kunde inte laddas for Mag 7." : "Data kunde inte laddas for ravaror.";
+  const tableGridClass = showMag7Table ? "grid-cols-7" : "grid-cols-8";
   const selectedMarketChart = kpiItems.find((item) => item.id === selectedMarketChartId) ?? kpiItems[0] ?? null;
 
   useEffect(() => {
@@ -495,13 +516,14 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
               </div>
             </div>
             <div className="mt-4 table-shell">
-              <div className="table-head table-head-text grid grid-cols-7 gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+              <div className={`table-head table-head-text grid ${tableGridClass} gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wide`}>
                 <div>{tableFirstColumn}</div>
                 <div>Senast</div>
                 <div>+/-</div>
                 <div>1V</div>
                 <div>I ar</div>
                 <div>1 ar</div>
+                {!showMag7Table ? <div>Tid</div> : null}
                 <div>Pristyp</div>
               </div>
               {tableItems.length > 0 ? (
@@ -509,14 +531,18 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
                   <div
                     key={`table-${item.id}`}
                     data-testid={`table-row-${item.id}`}
-                    className="grid grid-cols-7 gap-2 border-t border-[var(--border)] px-4 py-3 text-sm"
+                    className={`grid ${tableGridClass} gap-2 border-t border-[var(--border)] px-4 py-3 text-sm`}
                   >
-                    <div>{item.name}</div>
+                    <div>
+                      <div>{item.name}</div>
+                      {!showMag7Table ? <div className="text-muted text-xs">{item.unit ?? "--"}</div> : null}
+                    </div>
                     <div>{formatValue(item.last)}</div>
-                    <div className={changeToneClass(item.day_pct)}>{formatPercent(item.day_pct)}</div>
+                    <div className={changeToneClass(item.day_pct)}>{formatAbsAndPercent(item.day_abs, item.day_pct)}</div>
                     <div className={changeToneClass(item.w1_pct)}>{formatPercent(item.w1_pct)}</div>
                     <div className={changeToneClass(item.ytd_pct)}>{formatPercent(item.ytd_pct)}</div>
                     <div className={changeToneClass(item.y1_pct)}>{formatPercent(item.y1_pct)}</div>
+                    {!showMag7Table ? <div>{formatTimestampCell(item.timestamp_local)}</div> : null}
                     <div>{item.price_type ?? "--"}</div>
                   </div>
                 ))

@@ -67,11 +67,13 @@ Syftet är en finansiell dashboard för flera enheter (laptop/mobil/tablet) med:
   - Punkt som decimaltecken är accepterat.
   - Tusentalsavgränsare (mellanslag) krävs inte.
 - Färglogik enligt spec (positiv grön, negativ röd) är inte fullt implementerad/verifierad.
-- Råvarutabellen är inte fullt spec-komplett:
-  - kolumn `TID` saknas
-  - enhet i första kolumnen enligt spec saknas
-  - tydlig visning av `abs + %` i `+/-` behöver säkras
-- Backend saknar schemalagd uppdatering (spec: var 60:e sekund); nuvarande upplägg är request-driven med cache.
+- Råvarutabellen är uppdaterad enligt spec:
+  - kolumn `TID` finns
+  - enhet visas i första kolumnen
+  - `+/-` visar tydligt `abs + %`
+- Backend har schemalagd uppdatering var 60:e sekund via bakgrundsjobb.
+  - API-anrop använder i första hand förvärmd cache.
+  - Request-driven fallback finns kvar vid cache miss.
 - Stale-threshold enligt spec (t.ex. flagga stale efter längre utebliven uppdatering) saknar explicit implementation.
 - Tidsstämpel i Europe/Stockholm enligt spec saknas som tydlig backendstandard.
 - Skydd mot rate limits är inte fullt utbyggt:

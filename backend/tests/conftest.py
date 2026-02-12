@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.core.cache import cache
+
+os.environ.setdefault("APP_DISABLE_SCHEDULER", "1")
+
 from app.main import app
 
 
