@@ -5,8 +5,9 @@ import os
 
 from app.core.config import InstrumentConfig
 from app.core.scheduler import _refresh_once_sync
+from app.db.migrations import upgrade_to_head
 from app.db.models import JobRun, ProviderEvent, QuoteSnapshot, SeriesPoint
-from app.db.session import init_db, reset_database_engine, session_scope
+from app.db.session import reset_database_engine, session_scope
 from app.models.summary import SparkPoint, SummaryItem
 
 
@@ -48,7 +49,7 @@ def test_refresh_persists_scheduler_data(monkeypatch, tmp_path):
     db_file = tmp_path / "scheduler-test.db"
     monkeypatch.setenv("APP_DATABASE_URL", f"sqlite:///{db_file}")
     reset_database_engine()
-    init_db()
+    upgrade_to_head()
 
     instruments = [
         _instrument("brent", "commodities", "BZ=F"),

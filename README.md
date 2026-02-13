@@ -34,9 +34,14 @@ Summary-svar:
 Begränsningar (v1):
 
 - SQLite används för persistens av scheduler-data.
-- Ingen migrationspipeline via Alembic CLI ännu.
 - Ingen publik auth/rate-limit middleware (endast upstream-skydd i providerlager).
 - Datakällan är Yahoo Finance och kan ge luckor/temporära fel.
+
+Migrations (Alembic):
+
+- Kör senaste schema: `cd backend && .venv/bin/alembic -c alembic.ini upgrade head`
+- Skapa ny migration: `cd backend && .venv/bin/alembic -c alembic.ini revision -m "beskrivning"`
+- Rollback ett steg: `cd backend && .venv/bin/alembic -c alembic.ini downgrade -1`
 
 Test:
 

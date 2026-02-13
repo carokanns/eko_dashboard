@@ -9,6 +9,7 @@ from app.core.cache import cache
 from app.core.provider_monitor import provider_monitor
 
 os.environ.setdefault("APP_DISABLE_SCHEDULER", "1")
+os.environ.setdefault("APP_DATABASE_URL", "sqlite:///./data/test.db")
 
 from app.main import app
 
