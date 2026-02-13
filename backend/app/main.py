@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.core.cache import cache
 from app.core.scheduler import scheduler
+from app.core.time import to_stockholm
 from app.routes.commodities import router as commodities_router
 from app.routes.inflation import router as inflation_router
 from app.routes.mag7 import router as mag7_router
@@ -33,5 +34,6 @@ def health():
         "data_source": "yahoo_finance",
         "provider": {"name": "yfinance"},
         "cache": cache.stats(),
-        "last_update": last_update,
+        "is_stale": cache.is_globally_stale(),
+        "last_update": to_stockholm(last_update),
     }

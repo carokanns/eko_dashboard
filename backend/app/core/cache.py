@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import os
 from threading import Lock
 from typing import Any
 
 
 DEFAULT_TTL_SECONDS = 60
+DEFAULT_STALE_THRESHOLD_SECONDS = 600
 
 
 @dataclass
@@ -17,8 +19,13 @@ class CacheEntry:
 
 
 class InMemoryTTLCache:
-    def __init__(self, ttl_seconds: int = DEFAULT_TTL_SECONDS) -> None:
+    def __init__(
+        self,
+        ttl_seconds: int = DEFAULT_TTL_SECONDS,
+        stale_threshold_seconds: int = DEFAULT_STALE_THRESHOLD_SECONDS,
+    ) -> None:
         self.ttl_seconds = ttl_seconds
+        self.stale_threshold_seconds = stale_threshold_seconds
         self._store: dict[str, CacheEntry] = {}
         self._last_update: datetime | None = None
         self._lock = Lock()
@@ -62,11 +69,19 @@ class InMemoryTTLCache:
             return {
                 "entries": len(self._store),
                 "ttl_seconds": self.ttl_seconds,
+                "stale_threshold_seconds": self.stale_threshold_seconds,
             }
 
     def last_update(self) -> datetime | None:
         with self._lock:
             return self._last_update
+
+    def is_globally_stale(self) -> bool:
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            if self._last_update is None:
+                return True
+            return (now - self._last_update).total_seconds() > self.stale_threshold_seconds
 
     def clear(self) -> None:
         with self._lock:
@@ -74,4 +89,20 @@ class InMemoryTTLCache:
             self._last_update = None
 
 
-cache = InMemoryTTLCache(ttl_seconds=DEFAULT_TTL_SECONDS)
+def _stale_threshold_from_env() -> int:
+    raw = os.getenv("APP_STALE_THRESHOLD_SECONDS")
+    if raw is None:
+        return DEFAULT_STALE_THRESHOLD_SECONDS
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_STALE_THRESHOLD_SECONDS
+    if value <= 0:
+        return DEFAULT_STALE_THRESHOLD_SECONDS
+    return value
+
+
+cache = InMemoryTTLCache(
+    ttl_seconds=DEFAULT_TTL_SECONDS,
+    stale_threshold_seconds=_stale_threshold_from_env(),
+)

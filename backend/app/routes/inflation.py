@@ -8,6 +8,7 @@ from fastapi import Query
 
 from app.core.cache import cache
 from app.core.config import load_instruments
+from app.routes.response_utils import normalize_summary_items, to_stockholm_timestamp
 from app.services.inflation_data import fetch_series_for_instrument, fetch_summary_for_instruments
 
 router = APIRouter(prefix="/api/inflation", tags=["inflation"])
@@ -18,12 +19,13 @@ def inflation_summary():
     cache_key = "inflation_summary"
     cached = cache.get(cache_key)
     if cached is not None:
+        items = normalize_summary_items(cached.value, force_stale=cache.is_globally_stale())
         return {
-            "items": cached.value,
+            "items": items,
             "meta": {
                 "source": "fred",
                 "cached": True,
-                "fetched_at": cached.fetched_at,
+                "fetched_at": to_stockholm_timestamp(cached.fetched_at),
             },
         }
 
@@ -32,12 +34,13 @@ def inflation_summary():
     fetched_at = datetime.now(timezone.utc)
     has_fresh_values = any(item.last is not None for item in items)
     cache.set(cache_key, items, fetched_at=fetched_at, update_last_update=has_fresh_values)
+    normalized_items = normalize_summary_items(items, force_stale=cache.is_globally_stale())
     return {
-        "items": items,
+        "items": normalized_items,
         "meta": {
             "source": "fred",
             "cached": False,
-            "fetched_at": fetched_at,
+            "fetched_at": to_stockholm_timestamp(fetched_at),
         },
     }
 
@@ -54,7 +57,7 @@ def inflation_series(id: str, range: str = Query(default="1y", pattern="^(1m|3m|
             "meta": {
                 "source": "fred",
                 "cached": True,
-                "fetched_at": cached.fetched_at,
+                "fetched_at": to_stockholm_timestamp(cached.fetched_at),
             },
         }
 
@@ -73,6 +76,6 @@ def inflation_series(id: str, range: str = Query(default="1y", pattern="^(1m|3m|
         "meta": {
             "source": "fred",
             "cached": False,
-            "fetched_at": fetched_at,
+            "fetched_at": to_stockholm_timestamp(fetched_at),
         },
     }

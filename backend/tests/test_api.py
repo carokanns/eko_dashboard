@@ -35,6 +35,8 @@ def test_health_payload(client: TestClient):
     assert payload["data_source"] == "yahoo_finance"
     assert payload["provider"]["name"] == "yfinance"
     assert payload["cache"]["ttl_seconds"] == 60
+    assert payload["cache"]["stale_threshold_seconds"] == 600
+    assert payload["is_stale"] is True
     assert payload["last_update"] is None
 
 
@@ -49,6 +51,7 @@ def test_health_last_update_after_successful_fetch(client: TestClient, monkeypat
 
     health = client.get("/api/health")
     assert health.status_code == 200
+    assert health.json()["is_stale"] is False
     assert health.json()["last_update"] is not None
 
 
@@ -76,6 +79,7 @@ def test_commodities_summary_response_shape_and_cache(client: TestClient, monkey
     assert payload["meta"]["source"] == "yahoo_finance"
     assert payload["meta"]["cached"] is False
     assert isinstance(payload["meta"]["fetched_at"], str)
+    assert datetime.fromisoformat(payload["meta"]["fetched_at"]).tzinfo is not None
     assert payload["items"]
 
     second = client.get("/api/commodities/summary")
@@ -160,7 +164,23 @@ def test_health_last_update_unchanged_when_all_items_stale(client: TestClient, m
 
     health = client.get("/api/health")
     assert health.status_code == 200
+    assert health.json()["is_stale"] is True
     assert health.json()["last_update"] is None
+
+
+def test_summary_marks_items_stale_when_global_stale(client: TestClient, monkeypatch):
+    def fake_fetch_summary(instruments):
+        items = [_sample_item(i.id, i.name_sv, stale=False) for i in instruments]
+        return items, {}
+
+    monkeypatch.setattr("app.routes.commodities.fetch_summary_for_instruments", fake_fetch_summary)
+    monkeypatch.setattr("app.routes.commodities.cache.is_globally_stale", lambda: True)
+
+    response = client.get("/api/commodities/summary")
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert items
+    assert all(item["is_stale"] for item in items)
 
 
 def test_inflation_summary_response_shape_and_cache(client: TestClient, monkeypatch):
@@ -212,4 +232,3 @@ def test_inflation_series_supports_6m_range(client: TestClient, monkeypatch):
     assert cached.status_code == 200
     assert cached.json()["meta"]["cached"] is True
     assert calls["count"] == 1
-
