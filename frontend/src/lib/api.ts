@@ -23,6 +23,8 @@ export type ApiMeta = {
   source: string;
   cached: boolean;
   fetched_at: string;
+  stale_reason?: "none" | "global_threshold" | "provider_error" | "no_recent_success";
+  age_seconds?: number;
 };
 
 export type SummaryResponse = {
@@ -37,7 +39,7 @@ export type SeriesResponse = {
   meta: ApiMeta;
 };
 
-const baseUrl = process.env.API_BASE_URL ?? "http://localhost:8000";
+const baseUrl = "/api/dashboard";
 
 async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, { cache: "no-store" });
@@ -48,20 +50,20 @@ async function fetchJson<T>(path: string): Promise<T> {
 }
 
 export function fetchCommoditiesSummary(): Promise<SummaryResponse> {
-  return fetchJson<SummaryResponse>("/api/commodities/summary");
+  return fetchJson<SummaryResponse>("/commodities/summary");
 }
 
 export function fetchMag7Summary(): Promise<SummaryResponse> {
-  return fetchJson<SummaryResponse>("/api/mag7/summary");
+  return fetchJson<SummaryResponse>("/mag7/summary");
 }
 
 export function fetchInflationSummary(): Promise<SummaryResponse> {
-  return fetchJson<SummaryResponse>("/api/inflation/summary");
+  return fetchJson<SummaryResponse>("/inflation/summary");
 }
 
 export function fetchCommoditySeries(id: string, range: "1m" | "3m" | "1y" = "1m"): Promise<SeriesResponse> {
   const query = new URLSearchParams({ id, range });
-  return fetchJson<SeriesResponse>(`/api/commodities/series?${query.toString()}`);
+  return fetchJson<SeriesResponse>(`/commodities/series?${query.toString()}`);
 }
 
 export function fetchInflationSeries(
@@ -69,5 +71,5 @@ export function fetchInflationSeries(
   range: "3m" | "6m" | "1y" = "1y",
 ): Promise<SeriesResponse> {
   const query = new URLSearchParams({ id, range });
-  return fetchJson<SeriesResponse>(`/api/inflation/series?${query.toString()}`);
+  return fetchJson<SeriesResponse>(`/inflation/series?${query.toString()}`);
 }

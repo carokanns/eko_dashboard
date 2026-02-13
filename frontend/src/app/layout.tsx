@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Space_Grotesk } from "next/font/google";
+import { AppProviders } from "./providers";
 import "./globals.css";
 
 const serif = Fraunces({
@@ -27,7 +28,7 @@ export default function RootLayout({
   return (
     <html lang="sv">
       <body className={`${serif.variable} ${grotesk.variable} antialiased`}>
-        {children}
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

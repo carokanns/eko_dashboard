@@ -38,6 +38,10 @@ def test_health_payload(client: TestClient):
     assert payload["cache"]["stale_threshold_seconds"] == 600
     assert payload["is_stale"] is True
     assert payload["last_update"] is None
+    assert payload["last_success_by_module"]["commodities"] is None
+    assert payload["last_success_by_module"]["mag7"] is None
+    assert payload["last_success_by_module"]["inflation"] is None
+    assert isinstance(payload["provider_stats"], dict)
 
 
 def test_health_last_update_after_successful_fetch(client: TestClient, monkeypatch):
@@ -53,6 +57,7 @@ def test_health_last_update_after_successful_fetch(client: TestClient, monkeypat
     assert health.status_code == 200
     assert health.json()["is_stale"] is False
     assert health.json()["last_update"] is not None
+    assert health.json()["last_success_by_module"]["commodities"] is not None
 
 
 def test_load_instruments_default_path():
@@ -79,6 +84,8 @@ def test_commodities_summary_response_shape_and_cache(client: TestClient, monkey
     assert payload["meta"]["source"] == "yahoo_finance"
     assert payload["meta"]["cached"] is False
     assert isinstance(payload["meta"]["fetched_at"], str)
+    assert payload["meta"]["stale_reason"] == "none"
+    assert isinstance(payload["meta"]["age_seconds"], int)
     assert datetime.fromisoformat(payload["meta"]["fetched_at"]).tzinfo is not None
     assert payload["items"]
 
@@ -86,6 +93,7 @@ def test_commodities_summary_response_shape_and_cache(client: TestClient, monkey
     assert second.status_code == 200
     payload2 = second.json()
     assert payload2["meta"]["cached"] is True
+    assert "stale_reason" in payload2["meta"]
     assert calls["count"] == 1
 
 
@@ -120,6 +128,7 @@ def test_commodities_series_validates_range_and_uses_cache(client: TestClient, m
     assert payload["range"] == "1m"
     assert len(payload["points"]) == 2
     assert payload["meta"]["cached"] is False
+    assert payload["meta"]["stale_reason"] in {"none", "global_threshold"}
 
     cached = client.get("/api/commodities/series", params={"id": "brent", "range": "1m"})
     assert cached.status_code == 200
@@ -181,6 +190,7 @@ def test_summary_marks_items_stale_when_global_stale(client: TestClient, monkeyp
     items = response.json()["items"]
     assert items
     assert all(item["is_stale"] for item in items)
+    assert response.json()["meta"]["stale_reason"] == "global_threshold"
 
 
 def test_inflation_summary_response_shape_and_cache(client: TestClient, monkeypatch):
@@ -199,6 +209,7 @@ def test_inflation_summary_response_shape_and_cache(client: TestClient, monkeypa
     assert payload["meta"]["source"] == "fred"
     assert payload["meta"]["cached"] is False
     assert isinstance(payload["meta"]["fetched_at"], str)
+    assert payload["meta"]["stale_reason"] == "none"
 
     second = client.get("/api/inflation/summary")
     assert second.status_code == 200
@@ -227,8 +238,17 @@ def test_inflation_series_supports_6m_range(client: TestClient, monkeypatch):
     assert payload["range"] == "6m"
     assert len(payload["points"]) == 2
     assert payload["meta"]["cached"] is False
+    assert payload["meta"]["age_seconds"] >= 0
 
     cached = client.get("/api/inflation/series", params={"id": "inflation_se", "range": "6m"})
     assert cached.status_code == 200
     assert cached.json()["meta"]["cached"] is True
     assert calls["count"] == 1
+
+
+def test_config_endpoint_returns_instruments(client: TestClient):
+    response = client.get("/api/config")
+    assert response.status_code == 200
+    payload = response.json()
+    assert "instruments" in payload
+    assert len(payload["instruments"]) > 0

@@ -1,65 +1,81 @@
-import { fetchCommoditiesSummary, fetchInflationSeries, fetchInflationSummary, fetchMag7Summary, type SparkPoint } from "@/lib/api";
+"use client";
+
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+
+import {
+  fetchCommoditiesSummary,
+  fetchInflationSeries,
+  fetchInflationSummary,
+  fetchMag7Summary,
+  type SparkPoint,
+} from "@/lib/api";
 
 import { DashboardView } from "./dashboard-view";
 
-export default async function Home() {
+export default function Home() {
+  const commoditiesQuery = useQuery({
+    queryKey: ["summary", "commodities"],
+    queryFn: fetchCommoditiesSummary,
+  });
+
+  const mag7Query = useQuery({
+    queryKey: ["summary", "mag7"],
+    queryFn: fetchMag7Summary,
+  });
+
+  const inflationQuery = useQuery({
+    queryKey: ["summary", "inflation"],
+    queryFn: fetchInflationSummary,
+  });
+
+  const inflationIds = useMemo(
+    () => (inflationQuery.data?.items ?? []).map((item) => item.id),
+    [inflationQuery.data?.items],
+  );
+
+  const inflationSeriesQuery = useQuery({
+    queryKey: ["inflation-series", inflationIds],
+    enabled: inflationIds.length > 0,
+    queryFn: async () => {
+      const ranges: Array<"3m" | "6m" | "1y"> = ["1y", "6m", "3m"];
+      const results: Record<"3m" | "6m" | "1y", Record<string, SparkPoint[]>> = {
+        "3m": {},
+        "6m": {},
+        "1y": {},
+      };
+
+      await Promise.all(
+        ranges.flatMap((range) =>
+          inflationIds.map(async (id) => {
+            const series = await fetchInflationSeries(id, range);
+            results[range][id] = series.points;
+          }),
+        ),
+      );
+
+      return results;
+    },
+  });
+
   const warnings: string[] = [];
-  const inflationSeriesByRange: Record<"3m" | "6m" | "1y", Record<string, SparkPoint[]>> = {
-    "3m": {},
-    "6m": {},
-    "1y": {},
-  };
-
-  const [commoditiesResult, mag7Result, inflationResult] = await Promise.allSettled([
-    fetchCommoditiesSummary(),
-    fetchMag7Summary(),
-    fetchInflationSummary(),
-  ]);
-
-  const commodities = commoditiesResult.status === "fulfilled" ? commoditiesResult.value : null;
-  if (commoditiesResult.status === "rejected") {
-    warnings.push("Kunde inte hamta ravaror just nu.");
-  }
-
-  const mag7 = mag7Result.status === "fulfilled" ? mag7Result.value : null;
-  if (mag7Result.status === "rejected") {
-    warnings.push("Kunde inte hamta Mag 7 just nu.");
-  }
-
-  const inflation = inflationResult.status === "fulfilled" ? inflationResult.value : null;
-  if (inflationResult.status === "rejected") {
-    warnings.push("Kunde inte hamta inflation just nu.");
-  }
-
-  if (inflation) {
-    const ranges: Array<"3m" | "6m" | "1y"> = ["1y", "6m", "3m"];
-    const ids = inflation.items.map((item) => item.id);
-    const requests = ranges.flatMap((range) => ids.map((id) => ({ range, id })));
-    const results = await Promise.allSettled(
-      requests.map(({ range, id }) => fetchInflationSeries(id, range)),
-    );
-
-    let hasErrors = false;
-    results.forEach((result, index) => {
-      const { range, id } = requests[index];
-      if (result.status === "fulfilled") {
-        inflationSeriesByRange[range][id] = result.value.points;
-      } else {
-        hasErrors = true;
-      }
-    });
-
-    if (hasErrors) {
-      warnings.push("Vissa inflationsserier kunde inte hamtas.");
-    }
-  }
+  if (commoditiesQuery.isError) warnings.push("Kunde inte hamta ravaror just nu.");
+  if (mag7Query.isError) warnings.push("Kunde inte hamta Mag 7 just nu.");
+  if (inflationQuery.isError) warnings.push("Kunde inte hamta inflation just nu.");
+  if (inflationSeriesQuery.isError) warnings.push("Vissa inflationsserier kunde inte hamtas.");
 
   return (
     <DashboardView
-      commodities={commodities}
-      mag7={mag7}
-      inflation={inflation}
-      inflationSeriesByRange={inflationSeriesByRange}
+      commodities={commoditiesQuery.data ?? null}
+      mag7={mag7Query.data ?? null}
+      inflation={inflationQuery.data ?? null}
+      inflationSeriesByRange={
+        inflationSeriesQuery.data ?? {
+          "3m": {},
+          "6m": {},
+          "1y": {},
+        }
+      }
       warnings={warnings}
     />
   );

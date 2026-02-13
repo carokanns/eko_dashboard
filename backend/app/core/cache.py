@@ -28,6 +28,11 @@ class InMemoryTTLCache:
         self.stale_threshold_seconds = stale_threshold_seconds
         self._store: dict[str, CacheEntry] = {}
         self._last_update: datetime | None = None
+        self._last_success_by_module: dict[str, datetime | None] = {
+            "commodities": None,
+            "mag7": None,
+            "inflation": None,
+        }
         self._lock = Lock()
 
     def get(self, key: str) -> CacheEntry | None:
@@ -47,6 +52,7 @@ class InMemoryTTLCache:
         value: Any,
         fetched_at: datetime | None = None,
         update_last_update: bool = True,
+        module: str | None = None,
     ) -> CacheEntry:
         fetch_time = fetched_at or datetime.now(timezone.utc)
         entry = CacheEntry(
@@ -58,6 +64,8 @@ class InMemoryTTLCache:
             self._store[key] = entry
             if update_last_update:
                 self._last_update = fetch_time
+                if module in self._last_success_by_module:
+                    self._last_success_by_module[module] = fetch_time
         return entry
 
     def stats(self) -> dict[str, int]:
@@ -83,10 +91,16 @@ class InMemoryTTLCache:
                 return True
             return (now - self._last_update).total_seconds() > self.stale_threshold_seconds
 
+    def last_success_by_module(self) -> dict[str, datetime | None]:
+        with self._lock:
+            return dict(self._last_success_by_module)
+
     def clear(self) -> None:
         with self._lock:
             self._store.clear()
             self._last_update = None
+            for module in self._last_success_by_module:
+                self._last_success_by_module[module] = None
 
 
 def _stale_threshold_from_env() -> int:

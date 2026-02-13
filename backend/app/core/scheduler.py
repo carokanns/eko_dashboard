@@ -34,15 +34,27 @@ def _refresh_once_sync() -> None:
 
     commodity_items, _commodity_errors = fetch_market_summary_for_instruments(commodities)
     commodity_fresh = any(item.last is not None for item in commodity_items)
-    cache.set("commodities_summary", commodity_items, fetched_at=fetched_at, update_last_update=commodity_fresh)
+    cache.set(
+        "commodities_summary",
+        commodity_items,
+        fetched_at=fetched_at,
+        update_last_update=commodity_fresh,
+        module="commodities",
+    )
 
     mag7_items, _mag7_errors = fetch_market_summary_for_instruments(mag7)
     mag7_fresh = any(item.last is not None for item in mag7_items)
-    cache.set("mag7_summary", mag7_items, fetched_at=fetched_at, update_last_update=mag7_fresh)
+    cache.set("mag7_summary", mag7_items, fetched_at=fetched_at, update_last_update=mag7_fresh, module="mag7")
 
     inflation_items, _inflation_errors = fetch_inflation_summary_for_instruments(inflation)
     inflation_fresh = any(item.last is not None for item in inflation_items)
-    cache.set("inflation_summary", inflation_items, fetched_at=fetched_at, update_last_update=inflation_fresh)
+    cache.set(
+        "inflation_summary",
+        inflation_items,
+        fetched_at=fetched_at,
+        update_last_update=inflation_fresh,
+        module="inflation",
+    )
 
     for instrument in commodities:
         for range_key in COMMODITY_RANGES:

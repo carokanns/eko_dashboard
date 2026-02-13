@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.cache import cache
+from app.core.provider_monitor import provider_monitor
 
 os.environ.setdefault("APP_DISABLE_SCHEDULER", "1")
 
@@ -20,3 +21,4 @@ def client() -> TestClient:
 @pytest.fixture(autouse=True)
 def clear_cache() -> None:
     cache.clear()
+    provider_monitor.clear()

@@ -24,6 +24,7 @@ API:
 - `GET /api/inflation/summary`
 - `GET /api/inflation/series?id=<id>&range=1m|3m|6m|1y`
 - `GET /api/commodities/series?id=<id>&range=1m|3m|1y`
+- `GET /api/config`
 
 Summary-svar:
 
@@ -63,17 +64,17 @@ Körning utan Docker (LAN + Tailscale):
 - Frontend exponeras på nätet: `0.0.0.0:3000`
 - Frontend hämtar API server-side via `API_BASE_URL=http://127.0.0.1:8000`
 
-1; Förbered frontend-env:
+1. Förbered frontend-env:
 
 - `cp frontend/.env.example frontend/.env.local`
 
-2; Starta appen on-demand:
+2. Starta appen on-demand:
 
 - Båda tjänster: `./scripts/run-dev.sh`
 - Endast backend: `./scripts/run-backend.sh`
 - Endast frontend: `./scripts/run-frontend.sh`
 
-3; Åtkomst:
+3. Åtkomst:
 
 - LAN (hemma): `http://<laptop-lan-ip>:3000`
 - Tailscale (internet): `http://<tailscale-hostname-eller-ip>:3000`
