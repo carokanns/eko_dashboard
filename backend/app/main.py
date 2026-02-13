@@ -6,6 +6,7 @@ from app.core.cache import cache
 from app.core.provider_monitor import provider_monitor
 from app.core.scheduler import scheduler
 from app.core.time import to_stockholm
+from app.db.session import database_url, init_db
 from app.routes.config import router as config_router
 from app.routes.commodities import router as commodities_router
 from app.routes.inflation import router as inflation_router
@@ -14,6 +15,7 @@ from app.routes.mag7 import router as mag7_router
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    init_db()
     await scheduler.start()
     try:
         yield
@@ -44,4 +46,5 @@ def health():
         "last_update": to_stockholm(last_update),
         "last_success_by_module": last_success_by_module,
         "provider_stats": provider_monitor.snapshot(),
+        "database": {"enabled": True, "url": database_url()},
     }

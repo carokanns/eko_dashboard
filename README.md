@@ -33,8 +33,9 @@ Summary-svar:
 
 Begränsningar (v1):
 
-- Ingen persistent cache eller databas.
-- Ingen auth/rate-limiting.
+- SQLite används för persistens av scheduler-data.
+- Ingen migrationspipeline via Alembic CLI ännu.
+- Ingen publik auth/rate-limit middleware (endast upstream-skydd i providerlager).
 - Datakällan är Yahoo Finance och kan ge luckor/temporära fel.
 
 Test:
