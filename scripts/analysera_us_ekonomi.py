@@ -205,6 +205,11 @@ def main() -> int:
         default="md",
         help="Utskriftsformat. Standard: md.",
     )
+    parser.add_argument(
+        "--output",
+        default="reports/us_makro_omdome.md",
+        help="Målfil för output. Använd '-' för stdout.",
+    )
     args = parser.parse_args()
 
     db_path = Path(args.db_path)
@@ -220,46 +225,61 @@ def main() -> int:
 
     result = assess(rows)
 
+    content: str
     if args.format == "json":
-        print(
-            json.dumps(
-                {
-                    "score": result.score,
-                    "level": result.level,
-                    "summary": result.summary,
-                    "fetched_at": result.fetched_at,
-                    "reasons": result.reasons,
-                    "data_points": result.data_points,
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
+        content = json.dumps(
+            {
+                "score": result.score,
+                "level": result.level,
+                "summary": result.summary,
+                "fetched_at": result.fetched_at,
+                "reasons": result.reasons,
+                "data_points": result.data_points,
+            },
+            ensure_ascii=False,
+            indent=2,
         )
-        return 0
-
-    if args.format == "text":
-        print("USA makro-omdöme")
-        print(f"Nivå: {result.level} (score {result.score})")
+    elif args.format == "text":
+        lines = [
+            "USA makro-omdöme",
+            f"Nivå: {result.level} (score {result.score})",
+        ]
         if result.fetched_at:
-            print(f"Senaste datahämtning: {result.fetched_at}")
-        print(f"Sammanfattning: {result.summary}")
-        print("Drivare:")
+            lines.append(f"Senaste datahämtning: {result.fetched_at}")
+        lines.append(f"Sammanfattning: {result.summary}")
+        lines.append("Drivare:")
         for reason in result.reasons:
-            print(f"- {reason}")
+            lines.append(f"- {reason}")
+        content = "\n".join(lines)
+    else:
+        lines = [
+            "# USA makro-omdöme",
+            "",
+            f"- **Nivå:** `{result.level}` (score `{result.score}`)",
+        ]
+        if result.fetched_at:
+            lines.append(f"- **Senaste datahämtning:** `{result.fetched_at}`")
+        lines.extend(
+            [
+                f"- **Sammanfattning:** {result.summary}",
+                "",
+                "## Drivare",
+                "",
+            ]
+        )
+        for reason in result.reasons:
+            lines.append(f"- {reason}")
+        lines.append("")
+        content = "\n".join(lines)
+
+    if args.output == "-":
+        print(content)
         return 0
 
-    print("# USA makro-omdöme")
-    print("")
-    print(f"- **Nivå:** `{result.level}` (score `{result.score}`)")
-    if result.fetched_at:
-        print(f"- **Senaste datahämtning:** `{result.fetched_at}`")
-    print(f"- **Sammanfattning:** {result.summary}")
-    print("")
-    print("## Drivare")
-    print("")
-    for reason in result.reasons:
-        print(f"- {reason}")
-    print("")
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(content + ("\n" if not content.endswith("\n") else ""), encoding="utf-8")
+    print(f"Skrev output till: {output_path}")
     return 0
 
 
