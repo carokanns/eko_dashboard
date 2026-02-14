@@ -64,6 +64,12 @@ Notering:
 - Frontend exponeras på port `3000`.
 - Backend körs internt i compose-nätet och nås av frontend via `http://backend:8000`.
 
+Remote deploy (pull + rebuild):
+
+- Kör på målmaskinen i repots rot: `./scripts/update-remote-docker.sh`
+- Lås till specifik commit (CI/CD): `./scripts/update-remote-docker.sh <full-commit-hash>`
+- Skriptet kräver ren git-worktree och använder fast-forward-only pull.
+
 Körning utan Docker (LAN + Tailscale):
 
 - Backend körs endast lokalt på laptop: `127.0.0.1:8000`

@@ -3,6 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+printf "Running docs/shell sync checks...\n"
+(
+  cd "$ROOT_DIR"
+  ./scripts/check-readme-sync.sh
+)
+
 printf "Running backend tests...\n"
 (
   cd "$ROOT_DIR/backend"
