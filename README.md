@@ -37,6 +37,51 @@ Begränsningar (v1):
 - Ingen publik auth/rate-limit middleware (endast upstream-skydd i providerlager).
 - Datakällan är Yahoo Finance och kan ge luckor/temporära fel.
 
+Arkitekturskiss (V1):
+
+```text
+Klient (mobil/tablet/laptop)
+            |
+            v
+     Next.js frontend (:3000)
+            |
+            v
+   /api/dashboard/* route proxy
+            |
+            v
+      FastAPI backend (:8000)
+      |        |           |
+      |        |           +--> In-memory TTL cache (snabb respons)
+      |        |
+      |        +--> SQLite + Alembic (persistens: instrument/snapshots/series/job_run/provider_event)
+      |
+      +--> Providers
+            - Yahoo Finance (råvaror + Mag7)
+            - FRED (inflation)
+```
+
+Miljövariabler:
+
+Backend (`APP_*`):
+
+| Variabel | Standardvärde | Beskrivning |
+| --- | --- | --- |
+| `APP_DATABASE_URL` | `sqlite:///backend/data/dashboard.db` | Databas-URL. SQLite default, kan pekas till PostgreSQL senare. |
+| `APP_DISABLE_SCHEDULER` | `0` | Sätt `1/true/yes/on` för att stänga av scheduler. |
+| `APP_STALE_THRESHOLD_SECONDS` | `600` | Global stale-tröskel för health/meta. |
+| `APP_YAHOO_MAX_CALLS` | `120` | Max Yahoo-anrop per fönster. |
+| `APP_YAHOO_PERIOD_SECONDS` | `60` | Fönsterlängd (sek) för Yahoo rate-limit. |
+| `APP_FRED_MAX_CALLS` | `60` | Max FRED-anrop per fönster. |
+| `APP_FRED_PERIOD_SECONDS` | `60` | Fönsterlängd (sek) för FRED rate-limit. |
+| `APP_UPSTREAM_RETRY_ATTEMPTS` | `3` | Antal retry-försök mot upstream. |
+| `APP_UPSTREAM_RETRY_BASE_MS` | `250` | Bas-delay i ms för exponential backoff + jitter. |
+
+Frontend:
+
+| Variabel | Standardvärde | Beskrivning |
+| --- | --- | --- |
+| `API_BASE_URL` | `http://127.0.0.1:8000` (lokalt), `http://backend:8000` (compose) | Backend-URL som Next.js server-side proxy använder. |
+
 Migrations (Alembic):
 
 - Kör senaste schema: `cd backend && .venv/bin/alembic -c alembic.ini upgrade head`
@@ -48,6 +93,15 @@ Test:
 - Samlad: `./scripts/test-all.sh`
 - Backend: `cd backend && .venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt && .venv/bin/python -m pytest`
 - Frontend: `cd frontend && npm install && npm run test`
+
+Driftguide (privat nät):
+
+1. Starta tjänster med Docker Compose: `docker compose up -d --build`
+2. Verifiera backend health: `curl http://127.0.0.1:8000/api/health`
+3. Verifiera frontend: öppna `http://<maskinens-ip>:3000`
+4. Deploya uppdatering på målmaskin: `./scripts/update-remote-docker.sh`
+5. Vid incident: kontrollera `docker compose logs backend frontend --tail=200`
+6. Vid schemaändring: kör migration (`alembic upgrade head`) innan ny backend-version går live
 
 Körning med Docker (rekommenderat på annan Linux-maskin):
 

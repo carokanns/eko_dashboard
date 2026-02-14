@@ -1,5 +1,11 @@
 # V1-roadmap: Ekonomi Dashboard (baserat på `status4.md` + Kombinerad Spec V1)
 
+## Status 2026-02-14
+
+1. Fas 1-4: genomförda.
+2. Fas 5: genomförd (scheduler-loggning + observability via health/provider-stats och persistensspårning).
+3. Fas 6: genomförd för README/deploy/testflöde; kvar är endast slutligt releasebeslut efter full testkörning.
+
 ## Sammanfattning
 
 Målet är att gå från stabil MVP+ till en full V1 med robust drift för privat nät (LAN/Tailscale), utan publik-exponering som primärt mål. Planen låser dessa beslut:
