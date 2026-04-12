@@ -126,7 +126,7 @@ test("handles cached and invalid fetched_at without crashing", () => {
   expect(screen.getAllByText("--:--").length).toBeGreaterThan(0);
 });
 
-test("removes search box and shows status badges under tabs", () => {
+test("removes search box and shows status inside tabs", () => {
   render(
     <DashboardView
       commodities={summary}
@@ -138,9 +138,9 @@ test("removes search box and shows status badges under tabs", () => {
   );
 
   expect(screen.queryByPlaceholderText(/Sok i/i)).not.toBeInTheDocument();
-  expect(screen.getByText("Råvaror: Fresh")).toBeInTheDocument();
-  expect(screen.getByText("Mag 7: Fresh")).toBeInTheDocument();
-  expect(screen.getByText("Inflation: Fresh")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Råvaror" })).toHaveTextContent("Råvaror: Fresh");
+  expect(screen.getByRole("button", { name: "Mag 7" })).toHaveTextContent("Mag 7: Fresh");
+  expect(screen.getByRole("button", { name: "Inflation" })).toHaveTextContent("Inflation: Fresh");
 });
 
 test("sorts Mag7 table with sort controls", () => {

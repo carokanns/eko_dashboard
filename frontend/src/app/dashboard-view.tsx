@@ -306,6 +306,11 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
   const commodityStatus = getModuleStatus(commodityItems);
   const mag7Status = getModuleStatus(mag7Items);
   const inflationStatus = getModuleStatus(inflationItems);
+  const tabStatuses: Record<TabId, ModuleStatus> = {
+    commodities: commodityStatus,
+    mag7: mag7Status,
+    inflation: inflationStatus,
+  };
   const latestUpdate = commodities?.meta.fetched_at ?? mag7?.meta.fetched_at ?? inflation?.meta.fetched_at;
   const sourceNames = Array.from(
     new Set(
@@ -405,16 +410,12 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
               key={tab.id}
               className="tab-pill"
               data-active={tab.id === activeTab}
+              aria-label={tab.label}
               onClick={() => setActiveTab(tab.id)}
             >
-              {tab.label}
+              {tab.label}: {statusLabel(tabStatuses[tab.id])}
             </button>
           ))}
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-          <span className="badge">Råvaror: {statusLabel(commodityStatus)}</span>
-          <span className="badge">Mag 7: {statusLabel(mag7Status)}</span>
-          <span className="badge">Inflation: {statusLabel(inflationStatus)}</span>
         </div>
       </section>
 
