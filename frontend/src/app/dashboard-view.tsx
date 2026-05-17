@@ -24,6 +24,23 @@ type DashboardViewProps = {
 type ModuleStatus = "fresh" | "partial" | "stale" | "offline";
 type InflationRange = "3m" | "6m" | "1y";
 type Theme = "light" | "dark";
+type SlideshowSlide =
+  | {
+      id: string;
+      type: "market";
+      group: "Råvaror" | "Mag 7";
+      item: SummaryItem;
+    }
+  | {
+      id: string;
+      type: "inflation";
+      group: "Inflation";
+      title: string;
+      swedenItem: SummaryItem;
+      usaItem: SummaryItem;
+      swedenPoints: SparkPoint[];
+      usaPoints: SparkPoint[];
+    };
 
 const inflationRanges: Array<{ id: InflationRange; label: string }> = [
   { id: "1y", label: "12 man" },
@@ -271,9 +288,11 @@ function Sparkline({
 function InflationComparisonChart({
   swedenPoints,
   usaPoints,
+  heightClass = "h-64",
 }: {
   swedenPoints: SparkPoint[];
   usaPoints: SparkPoint[];
+  heightClass?: string;
 }) {
   const buildPath = (points: SparkPoint[], min: number, range: number) =>
     points
@@ -286,7 +305,7 @@ function InflationComparisonChart({
 
   const values = [...swedenPoints, ...usaPoints].map((point) => point.v);
   if (values.length < 2) {
-    return <div className="chart-empty mt-4 h-64 rounded-xl" />;
+    return <div className={`chart-empty mt-4 ${heightClass} rounded-xl`} />;
   }
 
   const min = Math.min(...values);
@@ -300,7 +319,7 @@ function InflationComparisonChart({
 
   return (
     <div className="mt-4">
-      <svg className="h-64 w-full" viewBox="0 0 100 100" preserveAspectRatio="none" data-testid="inflation-comparison-chart">
+      <svg className={`${heightClass} w-full`} viewBox="0 0 100 100" preserveAspectRatio="none" data-testid="inflation-comparison-chart">
         <polyline fill="none" stroke="var(--chart-primary)" strokeWidth="2.6" points={swedenPath} data-testid="inflation-line-sweden" />
         <polyline fill="none" stroke="var(--chart-secondary)" strokeWidth="2.6" points={usaPath} data-testid="inflation-line-usa" />
       </svg>
@@ -308,6 +327,112 @@ function InflationComparisonChart({
         <span>{tickLabels[0]}</span>
         <span>{tickLabels[1]}</span>
         <span>{tickLabels[2]}</span>
+      </div>
+    </div>
+  );
+}
+
+function SlideshowOverlay({
+  slides,
+  activeIndex,
+  intervalSeconds,
+  isPaused,
+  onClose,
+  onNext,
+  onPrevious,
+  onTogglePause,
+}: {
+  slides: SlideshowSlide[];
+  activeIndex: number;
+  intervalSeconds: number;
+  isPaused: boolean;
+  onClose: () => void;
+  onNext: () => void;
+  onPrevious: () => void;
+  onTogglePause: () => void;
+}) {
+  const activeSlide = slides[activeIndex] ?? null;
+
+  return (
+    <div className="slideshow-overlay" role="dialog" aria-modal="true" aria-label="Bildspel" data-testid="slideshow-overlay">
+      <div className="slideshow-shell">
+        {activeSlide ? (
+          <article className="slideshow-card">
+            <div className="slideshow-controls slideshow-slide-controls">
+              <span className="badge">{slides.length > 0 ? `${activeIndex + 1} / ${slides.length}` : "0 / 0"}</span>
+              <span className="badge">{isPaused ? "Pausad" : `${intervalSeconds} s`}</span>
+              <button type="button" className="slideshow-control" onClick={onPrevious}>
+                Föregående
+              </button>
+              <button type="button" className="slideshow-control" onClick={onTogglePause}>
+                {isPaused ? "Spela" : "Pausa"}
+              </button>
+              <button type="button" className="slideshow-control" onClick={onNext}>
+                Nästa
+              </button>
+              <button type="button" className="slideshow-control slideshow-close" onClick={onClose}>
+                Stäng
+              </button>
+            </div>
+            {activeSlide.type === "market" ? (
+              <>
+                <div className="slideshow-heading">
+                  <div>
+                    <h3 className="section-title text-5xl">{activeSlide.item.name}</h3>
+                    <p className="text-muted mt-2 text-sm">
+                      {activeSlide.group} • {activeSlide.item.is_stale ? "Stale" : "Live"} • {activeSlide.item.unit ?? "--"} • {activeSlide.item.price_type ?? "--"}
+                    </p>
+                  </div>
+                  <div className="slideshow-value-block">
+                    <div className="kpi-subtle">Senast</div>
+                    <div className="slideshow-value">{formatValue(activeSlide.item.last)}</div>
+                    <div className={`text-lg font-semibold ${changeToneClass(activeSlide.item.day_pct)}`}>
+                      {formatAbsAndPercent(activeSlide.item.day_abs, activeSlide.item.day_pct)}
+                    </div>
+                  </div>
+                </div>
+                <Sparkline points={activeSlide.item.sparkline} heightClass="h-[55vh]" showXAxis />
+              </>
+            ) : (
+              <>
+                <div className="slideshow-heading">
+                  <div>
+                    <h3 className="section-title text-5xl">{activeSlide.title}</h3>
+                    <p className="text-muted mt-2 text-sm">
+                      {activeSlide.group} • {activeSlide.swedenItem.is_stale || activeSlide.usaItem.is_stale ? "Stale" : "Live"} • Gemensam graf för Sverige och USA
+                    </p>
+                  </div>
+                  <div className="slideshow-value-block">
+                    <div className="kpi-subtle">Senast</div>
+                    <div className="text-2xl font-semibold">
+                      Sverige {formatValue(activeSlide.swedenItem.last)} / USA {formatValue(activeSlide.usaItem.last)}
+                    </div>
+                    <div className="text-muted text-sm">
+                      Förändring: Sverige {formatPercent(activeSlide.swedenItem.day_pct)} / USA {formatPercent(activeSlide.usaItem.day_pct)}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center gap-4 text-sm font-semibold">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="legend-dot-sweden h-3 w-3 rounded-full" />
+                    Sverige
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="legend-dot-usa h-3 w-3 rounded-full" />
+                    USA
+                  </span>
+                </div>
+                <InflationComparisonChart
+                  swedenPoints={activeSlide.swedenPoints}
+                  usaPoints={activeSlide.usaPoints}
+                  heightClass="h-[55vh]"
+                />
+              </>
+            )}
+          </article>
+        ) : (
+          <div className="slideshow-card text-muted">Ingen grafdata tillgänglig för bildspel.</div>
+        )}
       </div>
     </div>
   );
@@ -337,6 +462,10 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
   const [mag7SortDirection, setMag7SortDirection] = useState<"asc" | "desc">("desc");
   const [selectedMarketChartId, setSelectedMarketChartId] = useState<string | null>(null);
   const [inflationRange, setInflationRange] = useState<InflationRange>("1y");
+  const [isSlideshowOpen, setIsSlideshowOpen] = useState(false);
+  const [slideshowIntervalSeconds, setSlideshowIntervalSeconds] = useState(10);
+  const [slideshowIndex, setSlideshowIndex] = useState(0);
+  const [isSlideshowPaused, setIsSlideshowPaused] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -400,6 +529,72 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
   const tableEmptyText = showMag7Table ? "Data kunde inte laddas for Mag 7." : "Data kunde inte laddas for ravaror.";
   const tableGridClass = showMag7Table ? "grid-cols-7" : "grid-cols-8";
   const selectedMarketChart = kpiItems.find((item) => item.id === selectedMarketChartId) ?? kpiItems[0] ?? null;
+  const slideshowSlides: SlideshowSlide[] = [
+    ...filteredCommodityItems.map((item) => ({
+      id: `commodity-${item.id}`,
+      type: "market" as const,
+      group: "Råvaror" as const,
+      item,
+    })),
+    ...filteredMag7Items.map((item) => ({
+      id: `mag7-${item.id}`,
+      type: "market" as const,
+      group: "Mag 7" as const,
+      item,
+    })),
+    ...(swedenInflationItem && usaInflationItem
+      ? [
+          {
+            id: "inflation-comparison",
+            type: "inflation" as const,
+            group: "Inflation" as const,
+            title: "Inflation: Sverige & USA",
+            swedenItem: swedenInflationItem,
+            usaItem: usaInflationItem,
+            swedenPoints: swedenInflationPoints,
+            usaPoints: usaInflationPoints,
+          },
+        ]
+      : []),
+  ];
+  const safeSlideshowIndex = slideshowSlides.length > 0 ? Math.min(slideshowIndex, slideshowSlides.length - 1) : 0;
+  const openSlideshow = () => {
+    setSlideshowIndex(0);
+    setIsSlideshowPaused(false);
+    setIsSlideshowOpen(true);
+  };
+  const goToNextSlide = () => {
+    setSlideshowIndex((current) => (slideshowSlides.length > 0 ? (current + 1) % slideshowSlides.length : 0));
+  };
+  const goToPreviousSlide = () => {
+    setSlideshowIndex((current) => (slideshowSlides.length > 0 ? (current - 1 + slideshowSlides.length) % slideshowSlides.length : 0));
+  };
+
+  useEffect(() => {
+    if (!isSlideshowOpen || isSlideshowPaused || slideshowSlides.length <= 1) return undefined;
+    const timer = window.setInterval(() => {
+      setSlideshowIndex((current) => (current + 1) % slideshowSlides.length);
+    }, slideshowIntervalSeconds * 1000);
+    return () => window.clearInterval(timer);
+  }, [isSlideshowOpen, isSlideshowPaused, slideshowIntervalSeconds, slideshowSlides.length]);
+
+  useEffect(() => {
+    if (!isSlideshowOpen) return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsSlideshowOpen(false);
+      } else if (event.key === "ArrowRight") {
+        setSlideshowIndex((current) => (slideshowSlides.length > 0 ? (current + 1) % slideshowSlides.length : 0));
+      } else if (event.key === "ArrowLeft") {
+        setSlideshowIndex((current) => (slideshowSlides.length > 0 ? (current - 1 + slideshowSlides.length) % slideshowSlides.length : 0));
+      } else if (event.key === " ") {
+        event.preventDefault();
+        setIsSlideshowPaused((current) => !current);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isSlideshowOpen, slideshowSlides.length]);
 
   return (
     <main className="container-shell">
@@ -444,7 +639,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
       ) : null}
 
       <section className="mt-6 card-surface p-4">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -456,6 +651,28 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
               {tab.label}: {statusLabel(tabStatuses[tab.id])}
             </button>
           ))}
+          <button
+            type="button"
+            className="tab-pill"
+            data-active="false"
+            aria-label="Bildspel"
+            onClick={openSlideshow}
+          >
+            Bildspel
+          </button>
+          <label className="sr-only" htmlFor="slideshow-interval">Bildspelsintervall</label>
+          <select
+            id="slideshow-interval"
+            className="select-control rounded-full px-3 py-2 text-sm font-semibold"
+            aria-label="Bildspelsintervall"
+            value={slideshowIntervalSeconds}
+            onChange={(event) => setSlideshowIntervalSeconds(Number(event.target.value))}
+          >
+            <option value={5}>5 sek</option>
+            <option value={10}>10 sek</option>
+            <option value={15}>15 sek</option>
+            <option value={30}>30 sek</option>
+          </select>
         </div>
       </section>
 
@@ -636,6 +853,19 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
             <div className="card-surface text-muted mt-4 p-5 text-sm">Ingen inflationsdata tillgänglig.</div>
           )}
         </section>
+      ) : null}
+
+      {isSlideshowOpen ? (
+        <SlideshowOverlay
+          slides={slideshowSlides}
+          activeIndex={safeSlideshowIndex}
+          intervalSeconds={slideshowIntervalSeconds}
+          isPaused={isSlideshowPaused}
+          onClose={() => setIsSlideshowOpen(false)}
+          onNext={goToNextSlide}
+          onPrevious={goToPreviousSlide}
+          onTogglePause={() => setIsSlideshowPaused((current) => !current)}
+        />
       ) : null}
     </main>
   );

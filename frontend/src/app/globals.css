@@ -309,6 +309,89 @@ body {
   background: var(--chart-secondary);
 }
 
+.slideshow-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow-y: auto;
+  background: radial-gradient(900px 560px at 12% 0%, rgba(242, 143, 59, 0.22), transparent 60%),
+    radial-gradient(900px 560px at 88% 12%, rgba(47, 111, 106, 0.22), transparent 56%),
+    rgba(18, 16, 15, 0.74);
+  padding: 24px;
+  backdrop-filter: blur(14px);
+}
+
+.slideshow-shell {
+  min-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+}
+
+.slideshow-card {
+  border: 1px solid var(--border);
+  border-radius: 26px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 24px 80px rgba(18, 16, 15, 0.24);
+}
+
+.slideshow-controls,
+.slideshow-meta-row,
+.slideshow-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slideshow-controls {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.slideshow-slide-controls {
+  margin-bottom: 24px;
+}
+
+.slideshow-control {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 9px 13px;
+  background: var(--surface);
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.slideshow-close {
+  background: #1b2a41;
+  border-color: #1b2a41;
+  color: #f5f1ea;
+}
+
+.slideshow-card {
+  flex: 1;
+  padding: 30px;
+}
+
+.slideshow-heading {
+  justify-content: space-between;
+  margin-top: 24px;
+  align-items: flex-start;
+}
+
+.slideshow-value-block {
+  max-width: 420px;
+  text-align: right;
+}
+
+.slideshow-value {
+  font-family: var(--font-serif), "Times New Roman", serif;
+  font-size: clamp(42px, 6vw, 78px);
+  font-weight: 700;
+  line-height: 0.95;
+}
+
 .change-positive {
   color: var(--positive);
 }
@@ -328,5 +411,26 @@ body {
 
   .kpi-value {
     font-size: 26px;
+  }
+
+  .slideshow-overlay {
+    padding: 12px;
+  }
+
+  .slideshow-shell {
+    min-height: calc(100vh - 24px);
+  }
+
+  .slideshow-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .slideshow-card {
+    padding: 20px;
+  }
+
+  .slideshow-value-block {
+    text-align: left;
   }
 }

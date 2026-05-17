@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 
 import { DashboardView } from "./dashboard-view";
@@ -371,4 +371,73 @@ test("renders shared inflation graph and allows range switch", () => {
   expect(screen.getByRole("button", { name: "6 man" })).toHaveAttribute("data-active", "true");
   fireEvent.click(screen.getByRole("button", { name: "12 man" }));
   expect(screen.getByRole("button", { name: "12 man" })).toHaveAttribute("data-active", "true");
+});
+
+test("opens slideshow with interval choice, table rows and controls", () => {
+  const commodities = {
+    ...summary,
+    items: [
+      { ...summary.items[0], id: "gold", name: "Guld" },
+      { ...summary.items[0], id: "brent", name: "Brentolja" },
+    ],
+  };
+  const mag7 = {
+    ...summary,
+    items: [
+      { ...summary.items[0], id: "global_index", name: "Globalt index", display_group: "cards" },
+      { ...summary.items[0], id: "aapl", name: "Apple" },
+    ],
+  };
+  const inflation = {
+    ...summary,
+    items: [
+      { ...summary.items[0], id: "inflation_se", name: "Sverige KPI" },
+      { ...summary.items[0], id: "inflation_us", name: "USA KPI" },
+    ],
+  };
+  const rangeSeries = {
+    "3m": {},
+    "6m": {},
+    "1y": {
+      inflation_se: [{ t: "2025-02-01T00:00:00Z", v: 0.6 }, { t: "2026-02-01T00:00:00Z", v: 1.2 }],
+      inflation_us: [{ t: "2025-02-01T00:00:00Z", v: 1.7 }, { t: "2026-02-01T00:00:00Z", v: 2.1 }],
+    },
+  };
+
+  render(
+    <DashboardView
+      commodities={commodities}
+      mag7={mag7}
+      inflation={inflation}
+      inflationSeriesByRange={rangeSeries}
+      warnings={[]}
+    />,
+  );
+
+  expect(screen.getByRole("combobox", { name: "Bildspelsintervall" })).toHaveValue("10");
+  fireEvent.change(screen.getByRole("combobox", { name: "Bildspelsintervall" }), { target: { value: "15" } });
+  fireEvent.click(screen.getByRole("button", { name: "Bildspel" }));
+
+  const overlay = screen.getByTestId("slideshow-overlay");
+  expect(within(overlay).getByRole("heading", { name: "Guld" })).toBeInTheDocument();
+  expect(within(overlay).getByText("15 s")).toBeInTheDocument();
+
+  fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
+  expect(within(overlay).getByRole("heading", { name: "Brentolja" })).toBeInTheDocument();
+
+  fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
+  expect(within(overlay).getByRole("heading", { name: "Globalt index" })).toBeInTheDocument();
+
+  fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
+  expect(within(overlay).getByRole("heading", { name: "Apple" })).toBeInTheDocument();
+
+  fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
+  expect(within(overlay).getByRole("heading", { name: "Inflation: Sverige & USA" })).toBeInTheDocument();
+
+  fireEvent.click(within(overlay).getByRole("button", { name: "Pausa" }));
+  expect(within(overlay).getByText("Pausad")).toBeInTheDocument();
+  fireEvent.click(within(overlay).getByRole("button", { name: "Föregående" }));
+  expect(within(overlay).getByRole("heading", { name: "Apple" })).toBeInTheDocument();
+  fireEvent.click(within(overlay).getByRole("button", { name: "Stäng" }));
+  expect(screen.queryByTestId("slideshow-overlay")).not.toBeInTheDocument();
 });
