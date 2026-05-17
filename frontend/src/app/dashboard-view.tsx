@@ -122,13 +122,18 @@ function topMag7Cards(items: SummaryItem[]): SummaryItem[] {
     tsla: 7,
   };
 
-  return [...items]
+  const cardOnlyItems = items
+    .filter((item) => item.display_group === "cards")
+    .sort((a, b) => a.name.localeCompare(b.name, "sv"));
+  const companyCards = items
+    .filter((item) => item.display_group !== "cards")
     .sort((a, b) => {
       const ra = rank[a.id] ?? Number.MAX_SAFE_INTEGER;
       const rb = rank[b.id] ?? Number.MAX_SAFE_INTEGER;
       return ra - rb;
-    })
-    .slice(0, 6);
+    });
+
+  return [...cardOnlyItems, ...companyCards].slice(0, 6);
 }
 
 function sortCommoditiesForDisplay(items: SummaryItem[]): SummaryItem[] {
@@ -156,12 +161,39 @@ function formatXAxisTime(timestamp: string): string {
   return `${date.getUTCFullYear()}-${month}`;
 }
 
+function isoWeekLabel(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.valueOf())) return "--";
+  const normalized = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayNumber = normalized.getUTCDay() || 7;
+  normalized.setUTCDate(normalized.getUTCDate() + 4 - dayNumber);
+  const yearStart = new Date(Date.UTC(normalized.getUTCFullYear(), 0, 1));
+  const weekNumber = Math.ceil(((normalized.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return `v${String(weekNumber).padStart(2, "0")}`;
+}
+
+function weeklyTickIndexes(points: SparkPoint[]): number[] {
+  const seenWeeks = new Set<string>();
+  const indexes = points.reduce<number[]>((result, point, index) => {
+    const label = isoWeekLabel(point.t);
+    if (label !== "--" && !seenWeeks.has(label)) {
+      seenWeeks.add(label);
+      result.push(index);
+    }
+    return result;
+  }, []);
+
+  if (indexes.length <= 8) return indexes;
+  const step = Math.ceil(indexes.length / 8);
+  return indexes.filter((_, index) => index % step === 0);
+}
+
 function Sparkline({
   points,
   heightClass = "h-20",
   showXAxis = false,
 }: {
-  points: { t: string; v: number }[];
+  points: SparkPoint[];
   heightClass?: string;
   showXAxis?: boolean;
 }) {
@@ -172,7 +204,8 @@ function Sparkline({
   const values = points.map((p) => p.v);
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const range = max - min || 1;
+  const rawRange = max - min;
+  const range = rawRange || 1;
   const chartTop = 8;
   const chartBottom = showXAxis ? 78 : 100;
   const chartHeight = chartBottom - chartTop;
@@ -184,28 +217,51 @@ function Sparkline({
     })
     .join(" ");
 
-  const tickIndexes = Array.from(new Set([0, Math.floor((points.length - 1) / 2), points.length - 1]));
-  const tickLabels = tickIndexes.map((tickIndex) => formatXAxisTime(points[tickIndex]?.t ?? ""));
+  const tickIndexes = showXAxis
+    ? weeklyTickIndexes(points)
+    : Array.from(new Set([0, Math.floor((points.length - 1) / 2), points.length - 1]));
+  const tickLabels = tickIndexes.map((tickIndex) =>
+    showXAxis ? isoWeekLabel(points[tickIndex]?.t ?? "") : formatXAxisTime(points[tickIndex]?.t ?? ""),
+  );
+  const yAxisValues = rawRange === 0 ? [min + range, min + range / 2, min] : [max, min + range / 2, min];
 
   return (
     <div className="mt-4">
-      <svg className={`${heightClass} w-full`} viewBox="0 0 100 100" preserveAspectRatio="none">
-        <polyline fill="none" stroke="var(--chart-primary)" strokeWidth="2" points={path} />
+      <div className={showXAxis ? "chart-with-axis" : ""}>
+        <svg className={`${heightClass} w-full`} viewBox="0 0 100 100" preserveAspectRatio="none">
+          {showXAxis ? (
+            <>
+              {yAxisValues.map((_, index) => {
+                const y = chartTop + (index / 2) * chartHeight;
+                return <line key={`spark-grid-${index}`} x1="0" y1={y} x2="100" y2={y} stroke="var(--chart-grid)" strokeWidth="0.5" />;
+              })}
+              <line x1="0" y1={chartBottom} x2="100" y2={chartBottom} stroke="var(--chart-grid)" strokeWidth="0.6" />
+              {tickIndexes.map((tickIndex) => {
+                const x = points.length === 1 ? 50 : (tickIndex / (points.length - 1)) * 100;
+                return <line key={`spark-tick-${tickIndex}`} x1={x} y1={chartTop} x2={x} y2={chartBottom + 2} stroke="var(--chart-axis)" strokeWidth="0.25" opacity="0.45" />;
+              })}
+            </>
+          ) : null}
+          <polyline fill="none" stroke="var(--chart-primary)" strokeWidth={showXAxis ? "2.4" : "2"} points={path} />
+        </svg>
         {showXAxis ? (
-          <>
-            <line x1="0" y1={chartBottom} x2="100" y2={chartBottom} stroke="var(--chart-grid)" strokeWidth="0.6" />
-            {tickIndexes.map((tickIndex) => {
-              const x = points.length === 1 ? 50 : (tickIndex / (points.length - 1)) * 100;
-              return <line key={`spark-tick-${tickIndex}`} x1={x} y1={chartBottom} x2={x} y2={chartBottom + 2} stroke="var(--chart-axis)" strokeWidth="0.5" />;
-            })}
-          </>
+          <div className={`${heightClass} axis-text chart-y-axis text-xs font-semibold`}>
+            {yAxisValues.map((value, index) => (
+              <span key={`${index}-${value}`}>{formatValue(value)}</span>
+            ))}
+          </div>
         ) : null}
-      </svg>
+      </div>
       {showXAxis ? (
-        <div className="axis-text mt-1 flex items-center justify-between px-1 text-sm font-semibold leading-none">
-          <span>{tickLabels[0]}</span>
-          <span>{tickLabels[1]}</span>
-          <span>{tickLabels[2]}</span>
+        <div className="axis-text chart-x-axis mt-2 text-sm font-semibold leading-none">
+          {tickIndexes.map((tickIndex, index) => {
+            const x = points.length === 1 ? 50 : (tickIndex / (points.length - 1)) * 100;
+            return (
+              <span key={`${tickIndex}-${tickLabels[index]}`} style={{ left: `${x}%` }}>
+                {tickLabels[index]}
+              </span>
+            );
+          })}
         </div>
       ) : null}
     </div>
@@ -257,19 +313,25 @@ function InflationComparisonChart({
   );
 }
 
-function inflationRole(item: SummaryItem): string {
-  return item.id.includes("se") ? "Sverige" : "USA";
-}
-
 function sourceDisplayName(source: string): string {
   if (source === "yahoo_finance") return "Yahoo";
   if (source === "fred") return "FRED";
   return source;
 }
 
+function initialTheme(): Theme {
+  if (typeof window === "undefined") return "light";
+  const savedTheme = window.localStorage.getItem("dashboard-theme");
+  if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
+  if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    return "dark";
+  }
+  return "light";
+}
+
 export function DashboardView({ commodities, mag7, inflation, inflationSeriesByRange, warnings }: DashboardViewProps) {
   const router = useRouter();
-  const [theme, setTheme] = useState<Theme>("light");
+  const [theme, setTheme] = useState<Theme>(initialTheme);
   const [activeTab, setActiveTab] = useState<TabId>("commodities");
   const [mag7SortField, setMag7SortField] = useState<Mag7SortField>("ytd_pct");
   const [mag7SortDirection, setMag7SortDirection] = useState<"asc" | "desc">("desc");
@@ -282,17 +344,6 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
     }, 60_000);
     return () => clearInterval(timer);
   }, [router]);
-
-  useEffect(() => {
-    const savedTheme = window.localStorage.getItem("dashboard-theme");
-    if (savedTheme === "light" || savedTheme === "dark") {
-      setTheme(savedTheme);
-      return;
-    }
-    if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      setTheme("dark");
-    }
-  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -349,17 +400,6 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
   const tableEmptyText = showMag7Table ? "Data kunde inte laddas for Mag 7." : "Data kunde inte laddas for ravaror.";
   const tableGridClass = showMag7Table ? "grid-cols-7" : "grid-cols-8";
   const selectedMarketChart = kpiItems.find((item) => item.id === selectedMarketChartId) ?? kpiItems[0] ?? null;
-
-  useEffect(() => {
-    if (kpiItems.length === 0) {
-      setSelectedMarketChartId(null);
-      return;
-    }
-    setSelectedMarketChartId((current) => {
-      if (current && kpiItems.some((item) => item.id === current)) return current;
-      return kpiItems[0].id;
-    });
-  }, [activeTab, kpiItems]);
 
   return (
     <main className="container-shell">

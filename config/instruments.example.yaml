@@ -69,6 +69,16 @@ instruments:
     display_group: table
     sort_order: 1
     module: mag7
+  - id: global_index
+    name_sv: Globalt index
+    ticker: ACWI
+    unit_label: USD
+    price_type: MSCI ACWI ETF
+    badge_symbol: ACWI
+    precision: 2
+    display_group: cards
+    sort_order: 0
+    module: mag7
   - id: msft
     name_sv: Microsoft
     ticker: MSFT

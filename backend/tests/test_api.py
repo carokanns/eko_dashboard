@@ -66,6 +66,11 @@ def test_load_instruments_default_path():
     instruments = load_instruments()
     assert instruments
     assert all(hasattr(item, "module") for item in instruments)
+    global_index = next(item for item in instruments if item.id == "global_index")
+    assert global_index.module == "mag7"
+    assert global_index.ticker == "ACWI"
+    assert global_index.display_group == "cards"
+    assert global_index.sort_order == 0
 
 
 def test_commodities_summary_response_shape_and_cache(client: TestClient, monkeypatch):

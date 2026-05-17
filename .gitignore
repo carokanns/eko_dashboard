@@ -10,6 +10,7 @@ frontend/pnpm-debug.log*
 
 # Python
 backend/.venv
+backend/.venv312
 **/__pycache__/
 **/*.pyc
 backend/.pytest_cache/

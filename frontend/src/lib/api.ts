@@ -8,6 +8,7 @@ export type SummaryItem = {
   name: string;
   unit: string | null;
   price_type: string | null;
+  display_group?: string | null;
   last: number | null;
   day_abs: number | null;
   day_pct: number | null;

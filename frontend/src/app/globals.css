@@ -261,6 +261,46 @@ body {
   color: var(--text-muted);
 }
 
+.chart-with-axis {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.chart-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2px 0 18%;
+  text-align: right;
+}
+
+.chart-x-axis {
+  position: relative;
+  height: 18px;
+  margin-right: 68px;
+}
+
+.chart-x-axis span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.chart-x-axis span:first-child {
+  transform: translateX(0);
+}
+
+.chart-x-axis span:last-child {
+  transform: translateX(-100%);
+}
+
+.chart-x-axis span:only-child {
+  transform: translateX(0);
+}
+
 .legend-dot-sweden {
   background: var(--chart-primary);
 }

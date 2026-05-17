@@ -16,6 +16,7 @@ class SummaryItem(BaseModel):
     name: str
     unit: Optional[str] = None
     price_type: Optional[str] = None
+    display_group: Optional[str] = None
     last: Optional[float] = None
     day_abs: Optional[float] = None
     day_pct: Optional[float] = None

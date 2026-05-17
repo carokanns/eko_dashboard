@@ -171,10 +171,11 @@ test("sorts Mag7 table with sort controls", () => {
   expect(rows[0]).toHaveAttribute("data-testid", "table-row-nvda");
 });
 
-test("Mag 7 tab shows top 6 cards, selected chart and table", () => {
+test("Mag 7 tab shows global index first, company cards and table", () => {
   const mag7 = {
     ...summary,
     items: [
+      { ...summary.items[0], id: "global_index", name: "Globalt index", display_group: "cards" },
       { ...summary.items[0], id: "aapl", name: "Apple" },
       { ...summary.items[0], id: "msft", name: "Microsoft" },
       { ...summary.items[0], id: "googl", name: "Alphabet" },
@@ -198,13 +199,17 @@ test("Mag 7 tab shows top 6 cards, selected chart and table", () => {
   expect(screen.getByText("MAG 7")).toBeInTheDocument();
   expect(screen.getByText("Magnificent 7")).toBeInTheDocument();
   expect(screen.getByTestId("selected-market-chart-panel")).toBeInTheDocument();
+  expect(screen.getAllByTestId(/^kpi-card-/)[0]).toHaveAttribute("data-testid", "kpi-card-global_index");
+  expect(screen.getByTestId("kpi-card-global_index")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-msft")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-nvda")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-aapl")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-amzn")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-googl")).toBeInTheDocument();
-  expect(screen.getByTestId("kpi-card-meta")).toBeInTheDocument();
+  expect(screen.queryByTestId("kpi-card-meta")).not.toBeInTheDocument();
   expect(screen.queryByTestId("kpi-card-tsla")).not.toBeInTheDocument();
+  expect(screen.getAllByTestId(/^kpi-card-/)).toHaveLength(6);
+  expect(screen.getByTestId("table-row-global_index")).toBeInTheDocument();
 });
 
 test("switches table content to Mag7 when Mag 7 tab is selected", () => {
@@ -257,6 +262,39 @@ test("clicking KPI card updates selected market chart panel", () => {
   expect(screen.getByTestId("selected-market-chart-panel")).toBeInTheDocument();
   fireEvent.click(screen.getByTestId("kpi-card-gold"));
   expect(screen.getByRole("heading", { name: "Guld" })).toBeInTheDocument();
+});
+
+test("selected market chart shows weekly ticks and price levels", () => {
+  const commodities = {
+    ...summary,
+    items: [
+      {
+        ...summary.items[0],
+        sparkline: [
+          { t: "2026-02-02T10:00:00Z", v: 80 },
+          { t: "2026-02-09T10:00:00Z", v: 82 },
+          { t: "2026-02-16T10:00:00Z", v: 84 },
+        ],
+      },
+    ],
+  };
+
+  render(
+    <DashboardView
+      commodities={commodities}
+      mag7={summary}
+      inflation={summary}
+      inflationSeriesByRange={inflationSeriesByRange}
+      warnings={[]}
+    />,
+  );
+
+  expect(screen.getByText("v06")).toBeInTheDocument();
+  expect(screen.getByText("v07")).toBeInTheDocument();
+  expect(screen.getByText("v08")).toBeInTheDocument();
+  expect(screen.getByText("84.00")).toBeInTheDocument();
+  expect(screen.getByText("82.00")).toBeInTheDocument();
+  expect(screen.getByText("80.00")).toBeInTheDocument();
 });
 
 test("orders commodity KPI cards with gold silver copper first row and zinc first in second row", () => {
