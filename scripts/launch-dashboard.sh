@@ -4,10 +4,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_URL="http://127.0.0.1:3000"
 
-if [[ "${DASHBOARD_SKIP_AWAKE:-0}" != "1" && "${DASHBOARD_KEEP_AWAKE:-1}" != "0" ]]; then
-  exec "$ROOT_DIR/scripts/run-dashboard-awake.sh"
-fi
-
 cd "$ROOT_DIR"
 
 ./scripts/run-dev.sh

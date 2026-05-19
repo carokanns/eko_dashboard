@@ -139,9 +139,6 @@ Körning utan Docker (LAN + Tailscale):
 - Båda tjänster: `./scripts/run-dev.sh`
 - Endast backend: `./scripts/run-backend.sh`
 - Endast frontend: `./scripts/run-frontend.sh`
-- Starta dashboard och håll Linux Mint-skärmen vaken tills `Ctrl+C`: `./scripts/launch-dashboard.sh`
-- Samma awake-läge explicit: `./scripts/run-dashboard-awake.sh`
-- Starta utan awake-läge: `DASHBOARD_KEEP_AWAKE=0 ./scripts/launch-dashboard.sh`
 
 3. Åtkomst:
 
