@@ -79,6 +79,7 @@ test("renders stale indicator and warning fallback", () => {
   expect(screen.getByText("Kunde inte hamta ravaror just nu.")).toBeInTheDocument();
   expect(screen.getByText("Råvaror: Offline")).toBeInTheDocument();
   expect(screen.getByText("Mag 7: Offline")).toBeInTheDocument();
+  expect(screen.getByText("Index: Offline")).toBeInTheDocument();
   expect(screen.getByText("Inflation: Offline")).toBeInTheDocument();
   expect(screen.getByText("Ingen ravarudata tillganglig.")).toBeInTheDocument();
 });
@@ -140,6 +141,7 @@ test("removes search box and shows status inside tabs", () => {
   expect(screen.queryByPlaceholderText(/Sok i/i)).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Råvaror" })).toHaveTextContent("Råvaror: Fresh");
   expect(screen.getByRole("button", { name: "Mag 7" })).toHaveTextContent("Mag 7: Fresh");
+  expect(screen.getByRole("button", { name: "Index" })).toHaveTextContent("Index: Offline");
   expect(screen.getByRole("button", { name: "Inflation" })).toHaveTextContent("Inflation: Fresh");
 });
 
@@ -234,6 +236,39 @@ test("switches table content to Mag7 when Mag 7 tab is selected", () => {
   expect(screen.getByText("MAG 7")).toBeInTheDocument();
   expect(screen.getByTestId("table-row-aapl")).toBeInTheDocument();
   expect(screen.queryByTestId("table-row-brent")).not.toBeInTheDocument();
+});
+
+test("Index tab shows index cards and selected chart without table", () => {
+  const indexes = {
+    ...summary,
+    items: [
+      { ...summary.items[0], id: "global_index", name: "Globalt index", unit: "USD", price_type: "MSCI ACWI ETF" },
+      { ...summary.items[0], id: "omx_stockholm", name: "OMX Stockholm", unit: "punkter", price_type: "Index" },
+      { ...summary.items[0], id: "dow_jones", name: "Dow Jones", unit: "punkter", price_type: "Index" },
+      { ...summary.items[0], id: "dax", name: "Tyska börsen (DAX)", unit: "punkter", price_type: "Index" },
+      { ...summary.items[0], id: "nikkei_225", name: "Börsen i Japan (Nikkei 225)", unit: "punkter", price_type: "Index" },
+      { ...summary.items[0], id: "ftse_100", name: "Londonbörsen (FTSE 100)", unit: "punkter", price_type: "Index" },
+    ],
+  };
+
+  render(
+    <DashboardView
+      commodities={summary}
+      mag7={summary}
+      indexes={indexes}
+      inflation={summary}
+      inflationSeriesByRange={inflationSeriesByRange}
+      warnings={[]}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Index" }));
+  expect(screen.getByText("Index")).toBeInTheDocument();
+  expect(screen.getByTestId("kpi-card-global_index")).toBeInTheDocument();
+  expect(screen.getByTestId("kpi-card-omx_stockholm")).toBeInTheDocument();
+  expect(screen.getByTestId("kpi-card-dow_jones")).toBeInTheDocument();
+  expect(screen.getByTestId("selected-market-chart-panel")).toBeInTheDocument();
+  expect(screen.queryByText("Tabell")).not.toBeInTheDocument();
 });
 
 test("clicking KPI card updates selected market chart panel", () => {
@@ -401,6 +436,10 @@ test("opens slideshow with interval choice, table rows and controls", () => {
     <DashboardView
       commodities={commodities}
       mag7={mag7}
+      indexes={{
+        ...summary,
+        items: [{ ...summary.items[0], id: "global_index", name: "Globalt index" }],
+      }}
       inflation={inflation}
       inflationSeriesByRange={rangeSeries}
       warnings={[]}
@@ -422,12 +461,15 @@ test("opens slideshow with interval choice, table rows and controls", () => {
   expect(within(overlay).getByRole("heading", { name: "Apple" })).toBeInTheDocument();
 
   fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
+  expect(within(overlay).getByRole("heading", { name: "Globalt index" })).toBeInTheDocument();
+
+  fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
   expect(within(overlay).getByRole("heading", { name: "Inflation: Sverige & USA" })).toBeInTheDocument();
 
   fireEvent.click(within(overlay).getByRole("button", { name: "Pausa" }));
   expect(within(overlay).getByText("Pausad")).toBeInTheDocument();
   fireEvent.click(within(overlay).getByRole("button", { name: "Föregående" }));
-  expect(within(overlay).getByRole("heading", { name: "Apple" })).toBeInTheDocument();
+  expect(within(overlay).getByRole("heading", { name: "Globalt index" })).toBeInTheDocument();
   fireEvent.click(within(overlay).getByRole("button", { name: "Stäng" }));
   expect(screen.queryByTestId("slideshow-overlay")).not.toBeInTheDocument();
 });

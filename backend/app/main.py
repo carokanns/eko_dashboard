@@ -10,6 +10,7 @@ from app.db.migrations import upgrade_to_head
 from app.db.session import database_url
 from app.routes.config import router as config_router
 from app.routes.commodities import router as commodities_router
+from app.routes.indexes import router as indexes_router
 from app.routes.inflation import router as inflation_router
 from app.routes.mag7 import router as mag7_router
 
@@ -28,6 +29,7 @@ app = FastAPI(title="Ekonomi Dashboard API", version="0.1.0", lifespan=lifespan)
 
 app.include_router(commodities_router)
 app.include_router(mag7_router)
+app.include_router(indexes_router)
 app.include_router(inflation_router)
 app.include_router(config_router)
 

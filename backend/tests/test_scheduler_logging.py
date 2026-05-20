@@ -101,7 +101,7 @@ def test_scheduler_logs_structured_success(monkeypatch, tmp_path):
     assert completion["duration_ms"] >= 0
 
     module_events = [fields for event, fields in info_events if event == "scheduler.refresh.module_summary"]
-    assert len(module_events) == 3
+    assert len(module_events) == 4
     assert len(error_events) == 0
 
     reset_database_engine()

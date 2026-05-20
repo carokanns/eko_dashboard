@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import math
 
-from app.providers.yahoo_finance import HistoryPoint
+from app.providers.yahoo_finance import HistoryPoint, _extract_history_points
 from app.services.market_data import calculate_metrics
 
 
@@ -31,3 +32,21 @@ def test_calculate_metrics_handles_missing_references():
     assert metrics["day_pct"] is None
     assert metrics["w1_pct"] is None
     assert metrics["y1_pct"] is None
+
+
+def test_extract_history_points_skips_nan_close_values():
+    now = datetime.now(timezone.utc)
+
+    class FakeCloseSeries:
+        def items(self):
+            return [(now - timedelta(days=1), 100.0), (now, math.nan)]
+
+    class FakeDataFrame:
+        def __getitem__(self, key):
+            assert key == "Close"
+            return FakeCloseSeries()
+
+    points = _extract_history_points(FakeDataFrame())
+
+    assert len(points) == 1
+    assert points[0].close == 100.0

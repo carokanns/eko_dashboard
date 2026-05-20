@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import math
 import random
 import time
 from typing import Iterable
@@ -68,6 +69,8 @@ def _extract_history_points(dataframe: object) -> list[HistoryPoint]:
         try:
             numeric = float(close)
         except (TypeError, ValueError):
+            continue
+        if not math.isfinite(numeric):
             continue
         point_time = _to_utc(timestamp)
         if point_time is None:

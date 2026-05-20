@@ -45,6 +45,7 @@ def _refresh_once_sync() -> None:
     instruments = load_instruments()
     commodities = [item for item in instruments if item.module == "commodities"]
     mag7 = [item for item in instruments if item.module == "mag7"]
+    indexes = [item for item in instruments if item.module == "indexes"]
     inflation = [item for item in instruments if item.module == "inflation"]
 
     started_at = datetime.now(timezone.utc)
@@ -56,6 +57,7 @@ def _refresh_once_sync() -> None:
         instrument_total=len(instruments),
         commodities_count=len(commodities),
         mag7_count=len(mag7),
+        indexes_count=len(indexes),
         inflation_count=len(inflation),
     )
 
@@ -102,6 +104,22 @@ def _refresh_once_sync() -> None:
             item_count=len(mag7_items),
             error_count=len(mag7_errors),
             fresh=mag7_fresh,
+        )
+
+        index_items, index_errors = fetch_market_summary_for_instruments(indexes)
+        index_fresh = any(item.last is not None for item in index_items)
+        cache.set("indexes_summary", index_items, fetched_at=fetched_at, update_last_update=index_fresh, module="indexes")
+        store_summary_items(session, instrument_ids, index_items, fetched_at)
+        ok_count += len(index_items) - len(index_errors)
+        fail_count += len(index_errors)
+        if index_errors:
+            notes_parts.append(f"indexes_errors={len(index_errors)}")
+        _log_info(
+            "scheduler.refresh.module_summary",
+            module="indexes",
+            item_count=len(index_items),
+            error_count=len(index_errors),
+            fresh=index_fresh,
         )
 
         inflation_items, inflation_errors = fetch_inflation_summary_for_instruments(inflation)

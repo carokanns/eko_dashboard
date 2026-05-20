@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   fetchCommoditiesSummary,
+  fetchIndexesSummary,
   fetchInflationSeries,
   fetchInflationSummary,
   fetchMag7Summary,
@@ -22,6 +23,11 @@ export default function Home() {
   const mag7Query = useQuery({
     queryKey: ["summary", "mag7"],
     queryFn: fetchMag7Summary,
+  });
+
+  const indexesQuery = useQuery({
+    queryKey: ["summary", "indexes"],
+    queryFn: fetchIndexesSummary,
   });
 
   const inflationQuery = useQuery({
@@ -61,6 +67,7 @@ export default function Home() {
   const warnings: string[] = [];
   if (commoditiesQuery.isError) warnings.push("Kunde inte hamta ravaror just nu.");
   if (mag7Query.isError) warnings.push("Kunde inte hamta Mag 7 just nu.");
+  if (indexesQuery.isError) warnings.push("Kunde inte hamta index just nu.");
   if (inflationQuery.isError) warnings.push("Kunde inte hamta inflation just nu.");
   if (inflationSeriesQuery.isError) warnings.push("Vissa inflationsserier kunde inte hamtas.");
 
@@ -68,6 +75,7 @@ export default function Home() {
     <DashboardView
       commodities={commoditiesQuery.data ?? null}
       mag7={mag7Query.data ?? null}
+      indexes={indexesQuery.data ?? null}
       inflation={inflationQuery.data ?? null}
       inflationSeriesByRange={
         inflationSeriesQuery.data ?? {

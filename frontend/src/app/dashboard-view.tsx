@@ -8,6 +8,7 @@ import type { SparkPoint, SummaryItem, SummaryResponse } from "@/lib/api";
 const tabs = [
   { id: "commodities", label: "Råvaror" },
   { id: "mag7", label: "Mag 7" },
+  { id: "indexes", label: "Index" },
   { id: "inflation", label: "Inflation" },
 ] as const;
 
@@ -16,6 +17,7 @@ type TabId = (typeof tabs)[number]["id"];
 type DashboardViewProps = {
   commodities: SummaryResponse | null;
   mag7: SummaryResponse | null;
+  indexes?: SummaryResponse | null;
   inflation: SummaryResponse | null;
   inflationSeriesByRange: Record<"3m" | "6m" | "1y", Record<string, SparkPoint[]>>;
   warnings: string[];
@@ -28,7 +30,7 @@ type SlideshowSlide =
   | {
       id: string;
       type: "market";
-      group: "Råvaror" | "Mag 7";
+      group: "Råvaror" | "Mag 7" | "Index";
       item: SummaryItem;
     }
   | {
@@ -449,7 +451,7 @@ function initialTheme(): Theme {
   return "light";
 }
 
-export function DashboardView({ commodities, mag7, inflation, inflationSeriesByRange, warnings }: DashboardViewProps) {
+export function DashboardView({ commodities, mag7, indexes, inflation, inflationSeriesByRange, warnings }: DashboardViewProps) {
   const router = useRouter();
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [activeTab, setActiveTab] = useState<TabId>("commodities");
@@ -476,20 +478,23 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
 
   const commodityItems = commodities?.items ?? EMPTY_ITEMS;
   const mag7Items = mag7?.items ?? EMPTY_ITEMS;
+  const indexItems = indexes?.items ?? EMPTY_ITEMS;
   const inflationItems = inflation?.items ?? EMPTY_ITEMS;
 
   const commodityStatus = getModuleStatus(commodityItems);
   const mag7Status = getModuleStatus(mag7Items);
+  const indexStatus = getModuleStatus(indexItems);
   const inflationStatus = getModuleStatus(inflationItems);
   const tabStatuses: Record<TabId, ModuleStatus> = {
     commodities: commodityStatus,
     mag7: mag7Status,
+    indexes: indexStatus,
     inflation: inflationStatus,
   };
-  const latestUpdate = commodities?.meta.fetched_at ?? mag7?.meta.fetched_at ?? inflation?.meta.fetched_at;
+  const latestUpdate = commodities?.meta.fetched_at ?? mag7?.meta.fetched_at ?? indexes?.meta.fetched_at ?? inflation?.meta.fetched_at;
   const sourceNames = Array.from(
     new Set(
-      [commodities?.meta.source, mag7?.meta.source, inflation?.meta.source]
+      [commodities?.meta.source, mag7?.meta.source, indexes?.meta.source, inflation?.meta.source]
         .filter((source): source is string => Boolean(source))
         .map(sourceDisplayName),
     ),
@@ -502,6 +507,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
     mag7SortField,
     mag7SortDirection,
   );
+  const filteredIndexItems = indexItems;
 
   const swedenInflationItem = inflationItems.find((item) => item.id.includes("se")) ?? null;
   const usaInflationItem = inflationItems.find((item) => item.id.includes("us")) ?? null;
@@ -511,13 +517,18 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
     : [];
   const usaInflationPoints = usaInflationItem ? selectedRangeSeries[usaInflationItem.id] ?? usaInflationItem.sparkline : [];
 
-  const showMarketSections = activeTab === "commodities" || activeTab === "mag7";
+  const showMarketSections = activeTab === "commodities" || activeTab === "mag7" || activeTab === "indexes";
   const showMag7Table = activeTab === "mag7";
+  const showIndexCards = activeTab === "indexes";
   const showInflation = activeTab === "inflation";
 
-  const kpiItems = showMag7Table ? topMag7Cards(filteredMag7Items) : filteredCommodityItems;
-  const kpiTitle = showMag7Table ? "Magnificent 7" : "Råvaror";
-  const kpiEmptyText = showMag7Table ? "Ingen Mag 7-data tillganglig." : "Ingen ravarudata tillganglig.";
+  const kpiItems = showMag7Table ? topMag7Cards(filteredMag7Items) : showIndexCards ? filteredIndexItems : filteredCommodityItems;
+  const kpiTitle = showMag7Table ? "Magnificent 7" : showIndexCards ? "Index" : "Råvaror";
+  const kpiEmptyText = showMag7Table
+    ? "Ingen Mag 7-data tillganglig."
+    : showIndexCards
+      ? "Ingen indexdata tillganglig."
+      : "Ingen ravarudata tillganglig.";
   const tableItems = showMag7Table ? filteredMag7Items : filteredCommodityItems;
   const tableLabel = showMag7Table ? "MAG 7" : "RAVAROR";
   const tableFirstColumn = showMag7Table ? "Bolag" : "Ravara / Enhet";
@@ -535,6 +546,12 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
       id: `mag7-${item.id}`,
       type: "market" as const,
       group: "Mag 7" as const,
+      item,
+    })),
+    ...filteredIndexItems.map((item) => ({
+      id: `index-${item.id}`,
+      type: "market" as const,
+      group: "Index" as const,
       item,
     })),
     ...(swedenInflationItem && usaInflationItem
@@ -734,7 +751,7 @@ export function DashboardView({ commodities, mag7, inflation, inflationSeriesByR
         </>
       ) : null}
 
-      {showMarketSections ? (
+      {showMarketSections && !showIndexCards ? (
         <>
           <section className="mt-10">
             <div className="flex items-center justify-between">

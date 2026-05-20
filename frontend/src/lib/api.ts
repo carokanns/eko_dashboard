@@ -58,6 +58,10 @@ export function fetchMag7Summary(): Promise<SummaryResponse> {
   return fetchJson<SummaryResponse>("/mag7/summary");
 }
 
+export function fetchIndexesSummary(): Promise<SummaryResponse> {
+  return fetchJson<SummaryResponse>("/indexes/summary");
+}
+
 export function fetchInflationSummary(): Promise<SummaryResponse> {
   return fetchJson<SummaryResponse>("/inflation/summary");
 }

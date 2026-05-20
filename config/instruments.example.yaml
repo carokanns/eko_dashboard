@@ -129,6 +129,66 @@ instruments:
     display_group: table
     sort_order: 7
     module: mag7
+  - id: global_index
+    name_sv: Globalt index
+    ticker: ACWI
+    unit_label: USD
+    price_type: MSCI ACWI ETF
+    badge_symbol: ACWI
+    precision: 2
+    display_group: cards
+    sort_order: 1
+    module: indexes
+  - id: omx_stockholm
+    name_sv: OMX Stockholm
+    ticker: ^OMX
+    unit_label: punkter
+    price_type: Index
+    badge_symbol: OMX
+    precision: 2
+    display_group: cards
+    sort_order: 2
+    module: indexes
+  - id: dow_jones
+    name_sv: Dow Jones
+    ticker: ^DJI
+    unit_label: punkter
+    price_type: Index
+    badge_symbol: DJI
+    precision: 2
+    display_group: cards
+    sort_order: 3
+    module: indexes
+  - id: dax
+    name_sv: Tyska börsen (DAX)
+    ticker: ^GDAXI
+    unit_label: punkter
+    price_type: Index
+    badge_symbol: DAX
+    precision: 2
+    display_group: cards
+    sort_order: 4
+    module: indexes
+  - id: nikkei_225
+    name_sv: Börsen i Japan (Nikkei 225)
+    ticker: ^N225
+    unit_label: punkter
+    price_type: Index
+    badge_symbol: N225
+    precision: 2
+    display_group: cards
+    sort_order: 5
+    module: indexes
+  - id: ftse_100
+    name_sv: Londonbörsen (FTSE 100)
+    ticker: ^FTSE
+    unit_label: punkter
+    price_type: Index
+    badge_symbol: FTSE
+    precision: 2
+    display_group: cards
+    sort_order: 6
+    module: indexes
   - id: inflation_se
     name_sv: Sverige KPI (YoY)
     ticker: CP0000SEM086NEST

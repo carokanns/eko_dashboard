@@ -31,6 +31,7 @@ class InMemoryTTLCache:
         self._last_success_by_module: dict[str, datetime | None] = {
             "commodities": None,
             "mag7": None,
+            "indexes": None,
             "inflation": None,
         }
         self._lock = Lock()

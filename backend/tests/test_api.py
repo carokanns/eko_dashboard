@@ -40,6 +40,7 @@ def test_health_payload(client: TestClient):
     assert payload["last_update"] is None
     assert payload["last_success_by_module"]["commodities"] is None
     assert payload["last_success_by_module"]["mag7"] is None
+    assert payload["last_success_by_module"]["indexes"] is None
     assert payload["last_success_by_module"]["inflation"] is None
     assert isinstance(payload["provider_stats"], dict)
 
@@ -110,6 +111,29 @@ def test_mag7_summary_partial_data_marks_stale(client: TestClient, monkeypatch):
     items = response.json()["items"]
     assert any(row["is_stale"] for row in items)
     assert any(not row["is_stale"] for row in items)
+
+
+def test_indexes_summary_response_shape_and_cache(client: TestClient, monkeypatch):
+    calls = {"count": 0}
+
+    def fake_fetch_summary(instruments):
+        calls["count"] += 1
+        items = [_sample_item(i.id, i.name_sv) for i in instruments]
+        return items, {}
+
+    monkeypatch.setattr("app.routes.indexes.fetch_summary_for_instruments", fake_fetch_summary)
+
+    first = client.get("/api/indexes/summary")
+    assert first.status_code == 200
+    payload = first.json()
+    assert payload["meta"]["source"] == "yahoo_finance"
+    assert payload["meta"]["cached"] is False
+    assert payload["items"]
+
+    second = client.get("/api/indexes/summary")
+    assert second.status_code == 200
+    assert second.json()["meta"]["cached"] is True
+    assert calls["count"] == 1
 
 
 def test_commodities_series_validates_range_and_uses_cache(client: TestClient, monkeypatch):
