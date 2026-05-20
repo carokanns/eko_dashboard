@@ -171,11 +171,10 @@ test("sorts Mag7 table with sort controls", () => {
   expect(rows[0]).toHaveAttribute("data-testid", "table-row-nvda");
 });
 
-test("Mag 7 tab shows global index first, company cards and table", () => {
+test("Mag 7 tab shows top 6 cards, selected chart and table", () => {
   const mag7 = {
     ...summary,
     items: [
-      { ...summary.items[0], id: "global_index", name: "Globalt index", display_group: "cards" },
       { ...summary.items[0], id: "aapl", name: "Apple" },
       { ...summary.items[0], id: "msft", name: "Microsoft" },
       { ...summary.items[0], id: "googl", name: "Alphabet" },
@@ -199,17 +198,14 @@ test("Mag 7 tab shows global index first, company cards and table", () => {
   expect(screen.getByText("MAG 7")).toBeInTheDocument();
   expect(screen.getByText("Magnificent 7")).toBeInTheDocument();
   expect(screen.getByTestId("selected-market-chart-panel")).toBeInTheDocument();
-  expect(screen.getAllByTestId(/^kpi-card-/)[0]).toHaveAttribute("data-testid", "kpi-card-global_index");
-  expect(screen.getByTestId("kpi-card-global_index")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-msft")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-nvda")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-aapl")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-amzn")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-googl")).toBeInTheDocument();
-  expect(screen.queryByTestId("kpi-card-meta")).not.toBeInTheDocument();
+  expect(screen.getByTestId("kpi-card-meta")).toBeInTheDocument();
   expect(screen.queryByTestId("kpi-card-tsla")).not.toBeInTheDocument();
   expect(screen.getAllByTestId(/^kpi-card-/)).toHaveLength(6);
-  expect(screen.getByTestId("table-row-global_index")).toBeInTheDocument();
 });
 
 test("switches table content to Mag7 when Mag 7 tab is selected", () => {
@@ -383,10 +379,7 @@ test("opens slideshow with interval choice, table rows and controls", () => {
   };
   const mag7 = {
     ...summary,
-    items: [
-      { ...summary.items[0], id: "global_index", name: "Globalt index", display_group: "cards" },
-      { ...summary.items[0], id: "aapl", name: "Apple" },
-    ],
+    items: [{ ...summary.items[0], id: "aapl", name: "Apple" }],
   };
   const inflation = {
     ...summary,
@@ -424,9 +417,6 @@ test("opens slideshow with interval choice, table rows and controls", () => {
 
   fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
   expect(within(overlay).getByRole("heading", { name: "Brentolja" })).toBeInTheDocument();
-
-  fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
-  expect(within(overlay).getByRole("heading", { name: "Globalt index" })).toBeInTheDocument();
 
   fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
   expect(within(overlay).getByRole("heading", { name: "Apple" })).toBeInTheDocument();

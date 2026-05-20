@@ -139,18 +139,13 @@ function topMag7Cards(items: SummaryItem[]): SummaryItem[] {
     tsla: 7,
   };
 
-  const cardOnlyItems = items
-    .filter((item) => item.display_group === "cards")
-    .sort((a, b) => a.name.localeCompare(b.name, "sv"));
-  const companyCards = items
-    .filter((item) => item.display_group !== "cards")
+  return [...items]
     .sort((a, b) => {
       const ra = rank[a.id] ?? Number.MAX_SAFE_INTEGER;
       const rb = rank[b.id] ?? Number.MAX_SAFE_INTEGER;
       return ra - rb;
-    });
-
-  return [...cardOnlyItems, ...companyCards].slice(0, 6);
+    })
+    .slice(0, 6);
 }
 
 function sortCommoditiesForDisplay(items: SummaryItem[]): SummaryItem[] {
