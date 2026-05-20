@@ -129,65 +129,105 @@ instruments:
     display_group: table
     sort_order: 7
     module: mag7
-  - id: global_index
-    name_sv: Globalt index
-    ticker: ACWI
-    unit_label: USD
-    price_type: MSCI ACWI ETF
+  - id: msci_acwi
+    name_sv: MSCI ACWI
+    ticker: ^892400-USD-STRD
+    unit_label: punkter
+    price_type: Globalt aktieindex
     badge_symbol: ACWI
     precision: 2
     display_group: cards
     sort_order: 1
     module: indexes
-  - id: omx_stockholm
-    name_sv: OMX Stockholm
-    ticker: ^OMX
+  - id: sp500
+    name_sv: S&P 500
+    ticker: ^GSPC
     unit_label: punkter
-    price_type: Index
-    badge_symbol: OMX
+    price_type: USA large cap
+    badge_symbol: SPX
     precision: 2
     display_group: cards
     sort_order: 2
     module: indexes
-  - id: dow_jones
-    name_sv: Dow Jones
-    ticker: ^DJI
+  - id: nasdaq_100
+    name_sv: Nasdaq 100
+    ticker: ^NDX
     unit_label: punkter
-    price_type: Index
-    badge_symbol: DJI
+    price_type: USA teknologi
+    badge_symbol: NDX
     precision: 2
     display_group: cards
     sort_order: 3
     module: indexes
-  - id: dax
-    name_sv: Tyska börsen (DAX)
-    ticker: ^GDAXI
+  - id: stoxx_europe_600
+    name_sv: STOXX Europe 600
+    ticker: ^STOXX
     unit_label: punkter
-    price_type: Index
-    badge_symbol: DAX
+    price_type: Europa brett
+    badge_symbol: SXXP
     precision: 2
     display_group: cards
     sort_order: 4
     module: indexes
-  - id: nikkei_225
-    name_sv: Börsen i Japan (Nikkei 225)
-    ticker: ^N225
+  - id: omxs30
+    name_sv: OMXS30
+    ticker: ^OMX
     unit_label: punkter
-    price_type: Index
-    badge_symbol: N225
+    price_type: Sverige large cap
+    badge_symbol: OMX
     precision: 2
     display_group: cards
     sort_order: 5
     module: indexes
-  - id: ftse_100
-    name_sv: Londonbörsen (FTSE 100)
-    ticker: ^FTSE
+  - id: msci_emerging_markets
+    name_sv: MSCI Emerging Markets
+    ticker: ^891800-USD-STRD
     unit_label: punkter
-    price_type: Index
-    badge_symbol: FTSE
+    price_type: Tillväxtmarknader
+    badge_symbol: EM
     precision: 2
     display_group: cards
     sort_order: 6
+    module: indexes
+  - id: bloomberg_commodity
+    name_sv: Bloomberg Commodity Index
+    ticker: ^BCOM
+    unit_label: punkter
+    price_type: Råvaruindex
+    badge_symbol: BCOM
+    precision: 2
+    display_group: cards
+    sort_order: 7
+    module: indexes
+  - id: us_10y_yield
+    name_sv: US 10Y-ränta
+    ticker: ^TNX
+    unit_label: indexpunkter
+    price_type: CBOE 10Y yield
+    badge_symbol: 10Y
+    precision: 2
+    display_group: cards
+    sort_order: 8
+    module: indexes
+  - id: dxy
+    name_sv: DXY / USD-index
+    ticker: DX-Y.NYB
+    unit_label: punkter
+    price_type: Dollarindex
+    badge_symbol: DXY
+    precision: 2
+    display_group: cards
+    sort_order: 9
+    module: indexes
+  - id: vix
+    name_sv: VIX
+    ticker: ^VIX
+    unit_label: punkter
+    price_type: Volatilitet
+    badge_symbol: VIX
+    precision: 2
+    display_group: cards
+    sort_order: 10
     module: indexes
   - id: inflation_se
     name_sv: Sverige KPI (YoY)

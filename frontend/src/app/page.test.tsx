@@ -127,6 +127,23 @@ test("handles cached and invalid fetched_at without crashing", () => {
   expect(screen.getAllByText("--:--").length).toBeGreaterThan(0);
 });
 
+test("applies saved theme after mount", async () => {
+  window.localStorage.setItem("dashboard-theme", "dark");
+
+  render(
+    <DashboardView
+      commodities={summary}
+      mag7={summary}
+      inflation={summary}
+      inflationSeriesByRange={inflationSeriesByRange}
+      warnings={[]}
+    />,
+  );
+
+  expect(await screen.findByRole("button", { name: "Ljust lage" })).toHaveAttribute("data-theme", "dark");
+  expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+});
+
 test("removes search box and shows status inside tabs", () => {
   render(
     <DashboardView
@@ -242,12 +259,16 @@ test("Index tab shows index cards and selected chart without table", () => {
   const indexes = {
     ...summary,
     items: [
-      { ...summary.items[0], id: "global_index", name: "Globalt index", unit: "USD", price_type: "MSCI ACWI ETF" },
-      { ...summary.items[0], id: "omx_stockholm", name: "OMX Stockholm", unit: "punkter", price_type: "Index" },
-      { ...summary.items[0], id: "dow_jones", name: "Dow Jones", unit: "punkter", price_type: "Index" },
-      { ...summary.items[0], id: "dax", name: "Tyska börsen (DAX)", unit: "punkter", price_type: "Index" },
-      { ...summary.items[0], id: "nikkei_225", name: "Börsen i Japan (Nikkei 225)", unit: "punkter", price_type: "Index" },
-      { ...summary.items[0], id: "ftse_100", name: "Londonbörsen (FTSE 100)", unit: "punkter", price_type: "Index" },
+      { ...summary.items[0], id: "msci_acwi", name: "MSCI ACWI", unit: "punkter", price_type: "Globalt aktieindex" },
+      { ...summary.items[0], id: "sp500", name: "S&P 500", unit: "punkter", price_type: "USA large cap" },
+      { ...summary.items[0], id: "nasdaq_100", name: "Nasdaq 100", unit: "punkter", price_type: "USA teknologi" },
+      { ...summary.items[0], id: "stoxx_europe_600", name: "STOXX Europe 600", unit: "punkter", price_type: "Europa brett" },
+      { ...summary.items[0], id: "omxs30", name: "OMXS30", unit: "punkter", price_type: "Sverige large cap" },
+      { ...summary.items[0], id: "msci_emerging_markets", name: "MSCI Emerging Markets", unit: "punkter", price_type: "Tillväxtmarknader" },
+      { ...summary.items[0], id: "bloomberg_commodity", name: "Bloomberg Commodity Index", unit: "punkter", price_type: "Råvaruindex" },
+      { ...summary.items[0], id: "us_10y_yield", name: "US 10Y-ränta", unit: "indexpunkter", price_type: "CBOE 10Y yield" },
+      { ...summary.items[0], id: "dxy", name: "DXY / USD-index", unit: "punkter", price_type: "Dollarindex" },
+      { ...summary.items[0], id: "vix", name: "VIX", unit: "punkter", price_type: "Volatilitet" },
     ],
   };
 
@@ -264,9 +285,9 @@ test("Index tab shows index cards and selected chart without table", () => {
 
   fireEvent.click(screen.getByRole("button", { name: "Index" }));
   expect(screen.getByText("Index")).toBeInTheDocument();
-  expect(screen.getByTestId("kpi-card-global_index")).toBeInTheDocument();
-  expect(screen.getByTestId("kpi-card-omx_stockholm")).toBeInTheDocument();
-  expect(screen.getByTestId("kpi-card-dow_jones")).toBeInTheDocument();
+  expect(screen.getByTestId("kpi-card-msci_acwi")).toBeInTheDocument();
+  expect(screen.getByTestId("kpi-card-sp500")).toBeInTheDocument();
+  expect(screen.getByTestId("kpi-card-vix")).toBeInTheDocument();
   expect(screen.getByTestId("selected-market-chart-panel")).toBeInTheDocument();
   expect(screen.queryByText("Tabell")).not.toBeInTheDocument();
 });
@@ -438,7 +459,7 @@ test("opens slideshow with interval choice, table rows and controls", () => {
       mag7={mag7}
       indexes={{
         ...summary,
-        items: [{ ...summary.items[0], id: "global_index", name: "Globalt index" }],
+        items: [{ ...summary.items[0], id: "msci_acwi", name: "MSCI ACWI" }],
       }}
       inflation={inflation}
       inflationSeriesByRange={rangeSeries}
@@ -461,7 +482,7 @@ test("opens slideshow with interval choice, table rows and controls", () => {
   expect(within(overlay).getByRole("heading", { name: "Apple" })).toBeInTheDocument();
 
   fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
-  expect(within(overlay).getByRole("heading", { name: "Globalt index" })).toBeInTheDocument();
+  expect(within(overlay).getByRole("heading", { name: "MSCI ACWI" })).toBeInTheDocument();
 
   fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
   expect(within(overlay).getByRole("heading", { name: "Inflation: Sverige & USA" })).toBeInTheDocument();
@@ -469,7 +490,7 @@ test("opens slideshow with interval choice, table rows and controls", () => {
   fireEvent.click(within(overlay).getByRole("button", { name: "Pausa" }));
   expect(within(overlay).getByText("Pausad")).toBeInTheDocument();
   fireEvent.click(within(overlay).getByRole("button", { name: "Föregående" }));
-  expect(within(overlay).getByRole("heading", { name: "Globalt index" })).toBeInTheDocument();
+  expect(within(overlay).getByRole("heading", { name: "MSCI ACWI" })).toBeInTheDocument();
   fireEvent.click(within(overlay).getByRole("button", { name: "Stäng" }));
   expect(screen.queryByTestId("slideshow-overlay")).not.toBeInTheDocument();
 });

@@ -441,8 +441,7 @@ function sourceDisplayName(source: string): string {
   return source;
 }
 
-function initialTheme(): Theme {
-  if (typeof window === "undefined") return "light";
+function resolvePreferredTheme(): Theme {
   const savedTheme = window.localStorage.getItem("dashboard-theme");
   if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
   if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches) {
@@ -453,7 +452,8 @@ function initialTheme(): Theme {
 
 export function DashboardView({ commodities, mag7, indexes, inflation, inflationSeriesByRange, warnings }: DashboardViewProps) {
   const router = useRouter();
-  const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [theme, setTheme] = useState<Theme>("light");
+  const [hasResolvedTheme, setHasResolvedTheme] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("commodities");
   const [mag7SortField, setMag7SortField] = useState<Mag7SortField>("ytd_pct");
   const [mag7SortDirection, setMag7SortDirection] = useState<"asc" | "desc">("desc");
@@ -472,9 +472,15 @@ export function DashboardView({ commodities, mag7, indexes, inflation, inflation
   }, [router]);
 
   useEffect(() => {
+    setTheme(resolvePreferredTheme());
+    setHasResolvedTheme(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasResolvedTheme) return;
     document.documentElement.setAttribute("data-theme", theme);
     window.localStorage.setItem("dashboard-theme", theme);
-  }, [theme]);
+  }, [hasResolvedTheme, theme]);
 
   const commodityItems = commodities?.items ?? EMPTY_ITEMS;
   const mag7Items = mag7?.items ?? EMPTY_ITEMS;
