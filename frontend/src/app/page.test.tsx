@@ -265,6 +265,7 @@ test("Index tab shows index cards and selected chart without table", () => {
       { ...summary.items[0], id: "stoxx_europe_600", name: "STOXX Europe 600", unit: "punkter", price_type: "Europa brett" },
       { ...summary.items[0], id: "omxs30", name: "OMXS30", unit: "punkter", price_type: "Sverige large cap" },
       { ...summary.items[0], id: "msci_emerging_markets", name: "MSCI Emerging Markets", unit: "punkter", price_type: "Tillväxtmarknader" },
+      { ...summary.items[0], id: "msci_thailand", name: "MSCI Thailand", unit: "USD", price_type: "iShares MSCI Thailand ETF-proxy" },
       { ...summary.items[0], id: "bloomberg_commodity", name: "Bloomberg Commodity Index", unit: "punkter", price_type: "Råvaruindex" },
       { ...summary.items[0], id: "us_10y_yield", name: "US 10Y-ränta", unit: "indexpunkter", price_type: "CBOE 10Y yield" },
       { ...summary.items[0], id: "dxy", name: "DXY / USD-index", unit: "punkter", price_type: "Dollarindex" },
@@ -287,6 +288,7 @@ test("Index tab shows index cards and selected chart without table", () => {
   expect(screen.getByText("Index")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-msci_acwi")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-sp500")).toBeInTheDocument();
+  expect(screen.getByTestId("kpi-card-msci_thailand")).toBeInTheDocument();
   expect(screen.getByTestId("kpi-card-vix")).toBeInTheDocument();
   expect(screen.getByTestId("selected-market-chart-panel")).toBeInTheDocument();
   expect(screen.queryByText("Tabell")).not.toBeInTheDocument();

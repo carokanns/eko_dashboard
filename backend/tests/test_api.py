@@ -67,6 +67,10 @@ def test_load_instruments_default_path():
     instruments = load_instruments()
     assert instruments
     assert all(hasattr(item, "module") for item in instruments)
+    emerging_markets = next(item for item in instruments if item.id == "msci_emerging_markets")
+    assert emerging_markets.ticker == "EEM"
+    thailand = next(item for item in instruments if item.id == "msci_thailand")
+    assert thailand.ticker == "THD"
 
 
 def test_commodities_summary_response_shape_and_cache(client: TestClient, monkeypatch):
