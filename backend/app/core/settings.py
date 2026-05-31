@@ -23,3 +23,9 @@ FRED_PERIOD_SECONDS = _int_env("APP_FRED_PERIOD_SECONDS", 60)
 
 UPSTREAM_RETRY_ATTEMPTS = _int_env("APP_UPSTREAM_RETRY_ATTEMPTS", 3)
 UPSTREAM_RETRY_BASE_MS = _int_env("APP_UPSTREAM_RETRY_BASE_MS", 250)
+
+
+def app_api_token() -> str | None:
+    raw = os.getenv("APP_API_TOKEN")
+    token = raw.strip() if raw else ""
+    return token or None

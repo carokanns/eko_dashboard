@@ -472,8 +472,15 @@ export function DashboardView({ commodities, mag7, indexes, inflation, inflation
   }, [router]);
 
   useEffect(() => {
-    setTheme(resolvePreferredTheme());
-    setHasResolvedTheme(true);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setTheme(resolvePreferredTheme());
+      setHasResolvedTheme(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

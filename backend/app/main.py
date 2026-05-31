@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from app.core.cache import cache
 from app.core.provider_monitor import provider_monitor
 from app.core.scheduler import scheduler
+from app.core.settings import app_api_token
 from app.core.time import to_stockholm
 from app.db.migrations import upgrade_to_head
 from app.db.session import database_url
@@ -26,6 +28,18 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Ekonomi Dashboard API", version="0.1.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def require_dashboard_token(request: Request, call_next):
+    token = app_api_token()
+    path = request.url.path
+    if token and path.startswith("/api/") and path != "/api/health":
+        supplied = request.headers.get("x-dashboard-token")
+        if supplied != token:
+            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+    return await call_next(request)
+
 
 app.include_router(commodities_router)
 app.include_router(mag7_router)

@@ -45,6 +45,23 @@ def test_health_payload(client: TestClient):
     assert isinstance(payload["provider_stats"], dict)
 
 
+def test_api_token_protects_non_health_routes(client: TestClient, monkeypatch):
+    monkeypatch.setenv("APP_API_TOKEN", "secret-token")
+
+    health = client.get("/api/health")
+    assert health.status_code == 200
+
+    missing = client.get("/api/config")
+    assert missing.status_code == 401
+
+    wrong = client.get("/api/config", headers={"x-dashboard-token": "wrong"})
+    assert wrong.status_code == 401
+
+    allowed = client.get("/api/config", headers={"x-dashboard-token": "secret-token"})
+    assert allowed.status_code == 200
+    assert allowed.json()["instruments"]
+
+
 def test_health_last_update_after_successful_fetch(client: TestClient, monkeypatch):
     def fake_fetch_summary(instruments):
         items = [_sample_item(i.id, i.name_sv) for i in instruments]

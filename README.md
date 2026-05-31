@@ -34,7 +34,7 @@ Summary-svar:
 Begränsningar (v1):
 
 - SQLite används för persistens av scheduler-data.
-- Ingen publik auth/rate-limit middleware (endast upstream-skydd i providerlager).
+- Enkel publik auth finns: gemensamt frontend-lösenord och internt backend-token.
 - Datakällan är Yahoo Finance och kan ge luckor/temporära fel.
 
 Arkitekturskiss (V1):
@@ -75,12 +75,15 @@ Backend (`APP_*`):
 | `APP_FRED_PERIOD_SECONDS` | `60` | Fönsterlängd (sek) för FRED rate-limit. |
 | `APP_UPSTREAM_RETRY_ATTEMPTS` | `3` | Antal retry-försök mot upstream. |
 | `APP_UPSTREAM_RETRY_BASE_MS` | `250` | Bas-delay i ms för exponential backoff + jitter. |
+| `APP_API_TOKEN` | tomt | Om satt kräver alla `/api/*` utom `/api/health` headern `x-dashboard-token`. |
 
 Frontend:
 
 | Variabel | Standardvärde | Beskrivning |
 | --- | --- | --- |
 | `API_BASE_URL` | `http://127.0.0.1:8000` (lokalt), `http://backend:8000` (compose) | Backend-URL som Next.js server-side proxy använder. |
+| `BACKEND_API_TOKEN` | tomt | Token som Next.js-proxyn skickar till backend som `x-dashboard-token`. Ska matcha `APP_API_TOKEN`. |
+| `DASHBOARD_PASSWORD` | tomt | Om satt krävs lösenord innan dashboarden visas. |
 
 Migrations (Alembic):
 
@@ -102,6 +105,16 @@ Driftguide (privat nät):
 4. Deploya uppdatering på målmaskin: `./scripts/update-remote-docker.sh`
 5. Vid incident: kontrollera `docker compose logs backend frontend --tail=200`
 6. Vid schemaändring: kör migration (`alembic upgrade head`) innan ny backend-version går live
+
+Publik gratisdeploy (familj/vänner):
+
+1. Backend: skapa Render Web Service från GitHub-repot med `backend/Dockerfile`.
+2. Sätt Render-env: `APP_API_TOKEN=<lang-hemlig-token>` och `APP_DISABLE_SCHEDULER=0`.
+3. Frontend: importera repot i Vercel med root directory `frontend`.
+4. Sätt Vercel-env: `API_BASE_URL=<Render-backend-url>`, `BACKEND_API_TOKEN=<samma-token>` och `DASHBOARD_PASSWORD=<valt-losenord>`.
+5. Dela endast Vercel-länken. Render-länken är publik men API-anrop, utom `/api/health`, kräver token.
+
+Render Free kan somna efter inaktivitet. Första laddningen efter vila kan därför ta cirka 30-60 sekunder.
 
 Körning med Docker (rekommenderat på annan Linux-maskin):
 
