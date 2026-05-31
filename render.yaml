@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: eko-dashboard-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_DISABLE_SCHEDULER
+        value: "0"
+      - key: APP_API_TOKEN
+        sync: false
