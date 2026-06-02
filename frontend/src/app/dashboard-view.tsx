@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { SparkPoint, SummaryItem, SummaryResponse } from "@/lib/api";
 
@@ -51,6 +50,62 @@ const inflationRanges: Array<{ id: InflationRange; label: string }> = [
 ];
 
 const EMPTY_ITEMS: SummaryItem[] = [];
+const SLIDESHOW_LOG_KEY = "dashboard-slideshow-log";
+const SLIDESHOW_LOG_LIMIT = 200;
+
+type BrowserMemoryInfo = {
+  usedJSHeapSize?: number;
+  totalJSHeapSize?: number;
+  jsHeapSizeLimit?: number;
+};
+
+type SlideshowLogEntry = {
+  at: string;
+  event: string;
+  index: number;
+  slideId: string | null;
+  slideCount: number;
+  intervalSeconds: number;
+  isPaused: boolean;
+  visibilityState: DocumentVisibilityState;
+  userAgent: string;
+  memory?: BrowserMemoryInfo;
+};
+
+function readSlideshowLog(): SlideshowLogEntry[] {
+  try {
+    const rawLog = window.localStorage.getItem(SLIDESHOW_LOG_KEY);
+    if (!rawLog) return [];
+    const parsed = JSON.parse(rawLog);
+    return Array.isArray(parsed) ? (parsed as SlideshowLogEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function captureBrowserMemory(): BrowserMemoryInfo | undefined {
+  const performanceWithMemory = performance as Performance & { memory?: BrowserMemoryInfo };
+  return performanceWithMemory.memory;
+}
+
+function writeSlideshowLog(entry: SlideshowLogEntry) {
+  try {
+    const nextLog = [...readSlideshowLog(), entry].slice(-SLIDESHOW_LOG_LIMIT);
+    window.localStorage.setItem(SLIDESHOW_LOG_KEY, JSON.stringify(nextLog));
+  } catch {
+    // A diagnostic log must never affect the dashboard itself.
+  }
+}
+
+function exportSlideshowLog() {
+  const log = readSlideshowLog();
+  const blob = new Blob([JSON.stringify(log, null, 2)], { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `dashboard-slideshow-log-${new Date().toISOString().replaceAll(":", "-")}.json`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
 
 function formatValue(value: number | null, precision = 2): string {
   if (value === null) return "--";
@@ -338,6 +393,7 @@ function SlideshowOverlay({
   onNext,
   onPrevious,
   onTogglePause,
+  onExportLog,
 }: {
   slides: SlideshowSlide[];
   activeIndex: number;
@@ -347,6 +403,7 @@ function SlideshowOverlay({
   onNext: () => void;
   onPrevious: () => void;
   onTogglePause: () => void;
+  onExportLog: () => void;
 }) {
   const activeSlide = slides[activeIndex] ?? null;
 
@@ -366,6 +423,9 @@ function SlideshowOverlay({
               </button>
               <button type="button" className="slideshow-control" onClick={onNext}>
                 Nästa
+              </button>
+              <button type="button" className="slideshow-control" onClick={onExportLog}>
+                Logg
               </button>
               <button type="button" className="slideshow-control slideshow-close" onClick={onClose}>
                 Stäng
@@ -451,7 +511,6 @@ function resolvePreferredTheme(): Theme {
 }
 
 export function DashboardView({ commodities, mag7, indexes, inflation, inflationSeriesByRange, warnings }: DashboardViewProps) {
-  const router = useRouter();
   const [theme, setTheme] = useState<Theme>("light");
   const [hasResolvedTheme, setHasResolvedTheme] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("commodities");
@@ -463,13 +522,9 @@ export function DashboardView({ commodities, mag7, indexes, inflation, inflation
   const [slideshowIntervalSeconds, setSlideshowIntervalSeconds] = useState(10);
   const [slideshowIndex, setSlideshowIndex] = useState(0);
   const [isSlideshowPaused, setIsSlideshowPaused] = useState(false);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      router.refresh();
-    }, 60_000);
-    return () => clearInterval(timer);
-  }, [router]);
+  const previousSlideshowOpenRef = useRef(false);
+  const previousSlideshowIndexRef = useRef(0);
+  const previousSlideshowPausedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -525,10 +580,14 @@ export function DashboardView({ commodities, mag7, indexes, inflation, inflation
   const swedenInflationItem = inflationItems.find((item) => item.id.includes("se")) ?? null;
   const usaInflationItem = inflationItems.find((item) => item.id.includes("us")) ?? null;
   const selectedRangeSeries = inflationSeriesByRange[inflationRange];
-  const swedenInflationPoints = swedenInflationItem
-    ? selectedRangeSeries[swedenInflationItem.id] ?? swedenInflationItem.sparkline
-    : [];
-  const usaInflationPoints = usaInflationItem ? selectedRangeSeries[usaInflationItem.id] ?? usaInflationItem.sparkline : [];
+  const swedenInflationPoints = useMemo(
+    () => (swedenInflationItem ? selectedRangeSeries[swedenInflationItem.id] ?? swedenInflationItem.sparkline : []),
+    [selectedRangeSeries, swedenInflationItem],
+  );
+  const usaInflationPoints = useMemo(
+    () => (usaInflationItem ? selectedRangeSeries[usaInflationItem.id] ?? usaInflationItem.sparkline : []),
+    [selectedRangeSeries, usaInflationItem],
+  );
 
   const showMarketSections = activeTab === "commodities" || activeTab === "mag7" || activeTab === "indexes";
   const showMag7Table = activeTab === "mag7";
@@ -548,41 +607,59 @@ export function DashboardView({ commodities, mag7, indexes, inflation, inflation
   const tableEmptyText = showMag7Table ? "Data kunde inte laddas for Mag 7." : "Data kunde inte laddas for ravaror.";
   const tableGridClass = showMag7Table ? "grid-cols-7" : "grid-cols-8";
   const selectedMarketChart = kpiItems.find((item) => item.id === selectedMarketChartId) ?? kpiItems[0] ?? null;
-  const slideshowSlides: SlideshowSlide[] = [
-    ...filteredCommodityItems.map((item) => ({
-      id: `commodity-${item.id}`,
-      type: "market" as const,
-      group: "Råvaror" as const,
-      item,
-    })),
-    ...filteredMag7Items.map((item) => ({
-      id: `mag7-${item.id}`,
-      type: "market" as const,
-      group: "Mag 7" as const,
-      item,
-    })),
-    ...filteredIndexItems.map((item) => ({
-      id: `index-${item.id}`,
-      type: "market" as const,
-      group: "Index" as const,
-      item,
-    })),
-    ...(swedenInflationItem && usaInflationItem
-      ? [
-          {
-            id: "inflation-comparison",
-            type: "inflation" as const,
-            group: "Inflation" as const,
-            title: "Inflation: Sverige & USA",
-            swedenItem: swedenInflationItem,
-            usaItem: usaInflationItem,
-            swedenPoints: swedenInflationPoints,
-            usaPoints: usaInflationPoints,
-          },
-        ]
-      : []),
-  ];
+  const slideshowSlides: SlideshowSlide[] = useMemo(
+    () => [
+      ...filteredCommodityItems.map((item) => ({
+        id: `commodity-${item.id}`,
+        type: "market" as const,
+        group: "Råvaror" as const,
+        item,
+      })),
+      ...filteredMag7Items.map((item) => ({
+        id: `mag7-${item.id}`,
+        type: "market" as const,
+        group: "Mag 7" as const,
+        item,
+      })),
+      ...filteredIndexItems.map((item) => ({
+        id: `index-${item.id}`,
+        type: "market" as const,
+        group: "Index" as const,
+        item,
+      })),
+      ...(swedenInflationItem && usaInflationItem
+        ? [
+            {
+              id: "inflation-comparison",
+              type: "inflation" as const,
+              group: "Inflation" as const,
+              title: "Inflation: Sverige & USA",
+              swedenItem: swedenInflationItem,
+              usaItem: usaInflationItem,
+              swedenPoints: swedenInflationPoints,
+              usaPoints: usaInflationPoints,
+            },
+          ]
+        : []),
+    ],
+    [filteredCommodityItems, filteredIndexItems, filteredMag7Items, swedenInflationItem, swedenInflationPoints, usaInflationItem, usaInflationPoints],
+  );
   const safeSlideshowIndex = slideshowSlides.length > 0 ? Math.min(slideshowIndex, slideshowSlides.length - 1) : 0;
+  const activeSlideshowSlide = slideshowSlides[safeSlideshowIndex] ?? null;
+  const logSlideshowEvent = useCallback((event: string, index = safeSlideshowIndex, slide = activeSlideshowSlide, paused = isSlideshowPaused) => {
+    writeSlideshowLog({
+      at: new Date().toISOString(),
+      event,
+      index,
+      slideId: slide?.id ?? null,
+      slideCount: slideshowSlides.length,
+      intervalSeconds: slideshowIntervalSeconds,
+      isPaused: paused,
+      visibilityState: document.visibilityState,
+      userAgent: navigator.userAgent,
+      memory: captureBrowserMemory(),
+    });
+  }, [activeSlideshowSlide, isSlideshowPaused, safeSlideshowIndex, slideshowIntervalSeconds, slideshowSlides.length]);
   const openSlideshow = () => {
     setSlideshowIndex(0);
     setIsSlideshowPaused(false);
@@ -620,6 +697,38 @@ export function DashboardView({ commodities, mag7, indexes, inflation, inflation
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isSlideshowOpen, slideshowSlides.length]);
+
+  useEffect(() => {
+    const wasOpen = previousSlideshowOpenRef.current;
+    const previousIndex = previousSlideshowIndexRef.current;
+    const previousPaused = previousSlideshowPausedRef.current;
+    if (isSlideshowOpen && !wasOpen) {
+      logSlideshowEvent("open");
+    } else if (!isSlideshowOpen && wasOpen) {
+      logSlideshowEvent("close", previousIndex, slideshowSlides[previousIndex] ?? null, previousPaused);
+    } else if (isSlideshowOpen && safeSlideshowIndex !== previousIndex) {
+      logSlideshowEvent("slide");
+    } else if (isSlideshowOpen && isSlideshowPaused !== previousPaused) {
+      logSlideshowEvent(isSlideshowPaused ? "pause" : "resume");
+    }
+
+    if (isSlideshowOpen) {
+      previousSlideshowIndexRef.current = safeSlideshowIndex;
+      previousSlideshowPausedRef.current = isSlideshowPaused;
+    } else if (wasOpen) {
+      previousSlideshowIndexRef.current = 0;
+      previousSlideshowPausedRef.current = false;
+    }
+    previousSlideshowOpenRef.current = isSlideshowOpen;
+  }, [isSlideshowOpen, isSlideshowPaused, logSlideshowEvent, safeSlideshowIndex, slideshowSlides]);
+
+  useEffect(() => {
+    if (!isSlideshowOpen) return undefined;
+    const timer = window.setInterval(() => {
+      logSlideshowEvent("heartbeat");
+    }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [isSlideshowOpen, logSlideshowEvent]);
 
   return (
     <main className="container-shell">
@@ -890,6 +999,7 @@ export function DashboardView({ commodities, mag7, indexes, inflation, inflation
           onNext={goToNextSlide}
           onPrevious={goToPreviousSlide}
           onTogglePause={() => setIsSlideshowPaused((current) => !current)}
+          onExportLog={exportSlideshowLog}
         />
       ) : null}
     </main>

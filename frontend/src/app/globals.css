@@ -314,11 +314,8 @@ body {
   inset: 0;
   z-index: 50;
   overflow-y: auto;
-  background: radial-gradient(900px 560px at 12% 0%, rgba(242, 143, 59, 0.22), transparent 60%),
-    radial-gradient(900px 560px at 88% 12%, rgba(47, 111, 106, 0.22), transparent 56%),
-    rgba(18, 16, 15, 0.74);
+  background: rgba(18, 16, 15, 0.86);
   padding: 24px;
-  backdrop-filter: blur(14px);
 }
 
 .slideshow-shell {
