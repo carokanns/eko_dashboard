@@ -51,7 +51,7 @@ const inflationRanges: Array<{ id: InflationRange; label: string }> = [
 
 const EMPTY_ITEMS: SummaryItem[] = [];
 const SLIDESHOW_LOG_KEY = "dashboard-slideshow-log";
-const SLIDESHOW_LOG_LIMIT = 200;
+const SLIDESHOW_LOG_LIMIT = 2000;
 
 type BrowserMemoryInfo = {
   usedJSHeapSize?: number;
@@ -64,6 +64,10 @@ type SlideshowLogEntry = {
   event: string;
   index: number;
   slideId: string | null;
+  nextIndex?: number;
+  nextSlideId?: string | null;
+  trigger?: string;
+  elapsedSincePreviousMs?: number;
   slideCount: number;
   intervalSeconds: number;
   isPaused: boolean;
@@ -90,7 +94,11 @@ function captureBrowserMemory(): BrowserMemoryInfo | undefined {
 
 function writeSlideshowLog(entry: SlideshowLogEntry) {
   try {
-    const nextLog = [...readSlideshowLog(), entry].slice(-SLIDESHOW_LOG_LIMIT);
+    const currentLog = readSlideshowLog();
+    const previousAt = currentLog.at(-1)?.at;
+    const elapsedSincePreviousMs = previousAt ? Date.parse(entry.at) - Date.parse(previousAt) : undefined;
+    const nextEntry = { ...entry, elapsedSincePreviousMs };
+    const nextLog = [...currentLog, nextEntry].slice(-SLIDESHOW_LOG_LIMIT);
     window.localStorage.setItem(SLIDESHOW_LOG_KEY, JSON.stringify(nextLog));
   } catch {
     // A diagnostic log must never affect the dashboard itself.
@@ -646,12 +654,15 @@ export function DashboardView({ commodities, mag7, indexes, inflation, inflation
   );
   const safeSlideshowIndex = slideshowSlides.length > 0 ? Math.min(slideshowIndex, slideshowSlides.length - 1) : 0;
   const activeSlideshowSlide = slideshowSlides[safeSlideshowIndex] ?? null;
-  const logSlideshowEvent = useCallback((event: string, index = safeSlideshowIndex, slide = activeSlideshowSlide, paused = isSlideshowPaused) => {
+  const logSlideshowEvent = useCallback((event: string, index = safeSlideshowIndex, slide = activeSlideshowSlide, paused = isSlideshowPaused, nextIndex?: number, trigger?: string) => {
     writeSlideshowLog({
       at: new Date().toISOString(),
       event,
       index,
       slideId: slide?.id ?? null,
+      nextIndex,
+      nextSlideId: nextIndex === undefined ? undefined : (slideshowSlides[nextIndex]?.id ?? null),
+      trigger,
       slideCount: slideshowSlides.length,
       intervalSeconds: slideshowIntervalSeconds,
       isPaused: paused,
@@ -659,26 +670,34 @@ export function DashboardView({ commodities, mag7, indexes, inflation, inflation
       userAgent: navigator.userAgent,
       memory: captureBrowserMemory(),
     });
-  }, [activeSlideshowSlide, isSlideshowPaused, safeSlideshowIndex, slideshowIntervalSeconds, slideshowSlides.length]);
+  }, [activeSlideshowSlide, isSlideshowPaused, safeSlideshowIndex, slideshowIntervalSeconds, slideshowSlides]);
   const openSlideshow = () => {
     setSlideshowIndex(0);
     setIsSlideshowPaused(false);
     setIsSlideshowOpen(true);
   };
+  const advanceSlideshow = useCallback((direction: 1 | -1, trigger: string) => {
+    setSlideshowIndex((current) => {
+      if (slideshowSlides.length === 0) return 0;
+      const nextIndex = (current + direction + slideshowSlides.length) % slideshowSlides.length;
+      logSlideshowEvent("advance", current, slideshowSlides[current] ?? null, isSlideshowPaused, nextIndex, trigger);
+      return nextIndex;
+    });
+  }, [isSlideshowPaused, logSlideshowEvent, slideshowSlides]);
   const goToNextSlide = () => {
-    setSlideshowIndex((current) => (slideshowSlides.length > 0 ? (current + 1) % slideshowSlides.length : 0));
+    advanceSlideshow(1, "button");
   };
   const goToPreviousSlide = () => {
-    setSlideshowIndex((current) => (slideshowSlides.length > 0 ? (current - 1 + slideshowSlides.length) % slideshowSlides.length : 0));
+    advanceSlideshow(-1, "button");
   };
 
   useEffect(() => {
     if (!isSlideshowOpen || isSlideshowPaused || slideshowSlides.length <= 1) return undefined;
     const timer = window.setInterval(() => {
-      setSlideshowIndex((current) => (current + 1) % slideshowSlides.length);
+      advanceSlideshow(1, "timer");
     }, slideshowIntervalSeconds * 1000);
     return () => window.clearInterval(timer);
-  }, [isSlideshowOpen, isSlideshowPaused, slideshowIntervalSeconds, slideshowSlides.length]);
+  }, [advanceSlideshow, isSlideshowOpen, isSlideshowPaused, slideshowIntervalSeconds, slideshowSlides.length]);
 
   useEffect(() => {
     if (!isSlideshowOpen) return undefined;
@@ -686,9 +705,9 @@ export function DashboardView({ commodities, mag7, indexes, inflation, inflation
       if (event.key === "Escape") {
         setIsSlideshowOpen(false);
       } else if (event.key === "ArrowRight") {
-        setSlideshowIndex((current) => (slideshowSlides.length > 0 ? (current + 1) % slideshowSlides.length : 0));
+        advanceSlideshow(1, "keyboard");
       } else if (event.key === "ArrowLeft") {
-        setSlideshowIndex((current) => (slideshowSlides.length > 0 ? (current - 1 + slideshowSlides.length) % slideshowSlides.length : 0));
+        advanceSlideshow(-1, "keyboard");
       } else if (event.key === " ") {
         event.preventDefault();
         setIsSlideshowPaused((current) => !current);
@@ -696,7 +715,7 @@ export function DashboardView({ commodities, mag7, indexes, inflation, inflation
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isSlideshowOpen, slideshowSlides.length]);
+  }, [advanceSlideshow, isSlideshowOpen]);
 
   useEffect(() => {
     const wasOpen = previousSlideshowOpenRef.current;

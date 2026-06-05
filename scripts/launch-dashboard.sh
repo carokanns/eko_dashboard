@@ -21,7 +21,11 @@ fi
 
 open_dashboard() {
   if command -v flatpak >/dev/null 2>&1 && flatpak info com.brave.Browser >/dev/null 2>&1; then
-    flatpak run com.brave.Browser "$APP_URL" >/dev/null 2>&1 &
+    flatpak run com.brave.Browser \
+      --disable-gpu \
+      --disable-gpu-compositing \
+      --disable-accelerated-2d-canvas \
+      "$APP_URL" >/dev/null 2>&1 &
     return 0
   fi
 
