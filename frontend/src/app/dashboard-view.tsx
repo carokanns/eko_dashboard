@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { SparkPoint, SummaryItem, SummaryResponse } from "@/lib/api";
+import type { MarketRange, SparkPoint, SummaryItem, SummaryResponse } from "@/lib/api";
 
 const tabs = [
   { id: "commodities", label: "Råvaror" },
@@ -18,12 +18,14 @@ type DashboardViewProps = {
   mag7: SummaryResponse | null;
   indexes?: SummaryResponse | null;
   inflation: SummaryResponse | null;
-  inflationSeriesByRange: Record<"3m" | "6m" | "1y", Record<string, SparkPoint[]>>;
+  marketRange?: MarketRange;
+  onMarketRangeChange?: (range: MarketRange) => void;
+  marketSeriesByModule?: Record<"commodities" | "mag7" | "indexes", Record<string, SparkPoint[]>>;
+  inflationSeries: Record<string, SparkPoint[]>;
   warnings: string[];
 };
 
 type ModuleStatus = "fresh" | "partial" | "stale" | "offline";
-type InflationRange = "3m" | "6m" | "1y";
 type Theme = "light" | "dark";
 type SlideshowSlide =
   | {
@@ -43,10 +45,11 @@ type SlideshowSlide =
       usaPoints: SparkPoint[];
     };
 
-const inflationRanges: Array<{ id: InflationRange; label: string }> = [
-  { id: "1y", label: "12 man" },
-  { id: "6m", label: "6 man" },
-  { id: "3m", label: "3 man" },
+const marketRanges: Array<{ id: MarketRange; label: string }> = [
+  { id: "1m", label: "1 mån" },
+  { id: "3m", label: "3 mån" },
+  { id: "6m", label: "6 mån" },
+  { id: "1y", label: "12 mån" },
 ];
 
 const EMPTY_ITEMS: SummaryItem[] = [];
@@ -231,6 +234,14 @@ function sortCommoditiesForDisplay(items: SummaryItem[]): SummaryItem[] {
   });
 }
 
+function withSeriesFallback(items: SummaryItem[], seriesById: Record<string, SparkPoint[]>): SummaryItem[] {
+  return items.map((item) => {
+    const points = seriesById[item.id];
+    if (!points || points.length === 0) return item;
+    return { ...item, sparkline: points };
+  });
+}
+
 function formatXAxisTime(timestamp: string): string {
   const date = new Date(timestamp);
   if (Number.isNaN(date.valueOf())) return "--";
@@ -319,7 +330,13 @@ function Sparkline({
               })}
             </>
           ) : null}
-          <polyline fill="none" stroke="var(--chart-primary)" strokeWidth={showXAxis ? "2.4" : "2"} points={path} />
+          <polyline
+            fill="none"
+            stroke="var(--chart-primary)"
+            strokeWidth={showXAxis ? "1.8" : "1.5"}
+            points={path}
+            vectorEffect="non-scaling-stroke"
+          />
         </svg>
         {showXAxis ? (
           <div className={`${heightClass} axis-text chart-y-axis text-xs font-semibold`}>
@@ -518,14 +535,23 @@ function resolvePreferredTheme(): Theme {
   return "light";
 }
 
-export function DashboardView({ commodities, mag7, indexes, inflation, inflationSeriesByRange, warnings }: DashboardViewProps) {
+export function DashboardView({
+  commodities,
+  mag7,
+  indexes,
+  inflation,
+  marketRange = "1m",
+  onMarketRangeChange,
+  marketSeriesByModule = { commodities: {}, mag7: {}, indexes: {} },
+  inflationSeries,
+  warnings,
+}: DashboardViewProps) {
   const [theme, setTheme] = useState<Theme>("light");
   const [hasResolvedTheme, setHasResolvedTheme] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("commodities");
   const [mag7SortField, setMag7SortField] = useState<Mag7SortField>("ytd_pct");
   const [mag7SortDirection, setMag7SortDirection] = useState<"asc" | "desc">("desc");
   const [selectedMarketChartId, setSelectedMarketChartId] = useState<string | null>(null);
-  const [inflationRange, setInflationRange] = useState<InflationRange>("1y");
   const [isSlideshowOpen, setIsSlideshowOpen] = useState(false);
   const [slideshowIntervalSeconds, setSlideshowIntervalSeconds] = useState(10);
   const [slideshowIndex, setSlideshowIndex] = useState(0);
@@ -577,24 +603,28 @@ export function DashboardView({ commodities, mag7, indexes, inflation, inflation
   );
   const sourceLabel = sourceNames.length > 0 ? sourceNames.join(" + ") : "--";
 
-  const filteredCommodityItems = sortCommoditiesForDisplay(commodityItems);
-  const filteredMag7Items = sortMag7Items(
-    mag7Items,
-    mag7SortField,
-    mag7SortDirection,
+  const filteredCommodityItems = useMemo(
+    () => sortCommoditiesForDisplay(withSeriesFallback(commodityItems, marketSeriesByModule.commodities)),
+    [commodityItems, marketSeriesByModule.commodities],
   );
-  const filteredIndexItems = indexItems;
+  const filteredMag7Items = useMemo(
+    () => sortMag7Items(withSeriesFallback(mag7Items, marketSeriesByModule.mag7), mag7SortField, mag7SortDirection),
+    [mag7Items, mag7SortDirection, mag7SortField, marketSeriesByModule.mag7],
+  );
+  const filteredIndexItems = useMemo(
+    () => withSeriesFallback(indexItems, marketSeriesByModule.indexes),
+    [indexItems, marketSeriesByModule.indexes],
+  );
 
   const swedenInflationItem = inflationItems.find((item) => item.id.includes("se")) ?? null;
   const usaInflationItem = inflationItems.find((item) => item.id.includes("us")) ?? null;
-  const selectedRangeSeries = inflationSeriesByRange[inflationRange];
   const swedenInflationPoints = useMemo(
-    () => (swedenInflationItem ? selectedRangeSeries[swedenInflationItem.id] ?? swedenInflationItem.sparkline : []),
-    [selectedRangeSeries, swedenInflationItem],
+    () => (swedenInflationItem ? inflationSeries[swedenInflationItem.id] ?? swedenInflationItem.sparkline : []),
+    [inflationSeries, swedenInflationItem],
   );
   const usaInflationPoints = useMemo(
-    () => (usaInflationItem ? selectedRangeSeries[usaInflationItem.id] ?? usaInflationItem.sparkline : []),
-    [selectedRangeSeries, usaInflationItem],
+    () => (usaInflationItem ? inflationSeries[usaInflationItem.id] ?? usaInflationItem.sparkline : []),
+    [inflationSeries, usaInflationItem],
   );
 
   const showMarketSections = activeTab === "commodities" || activeTab === "mag7" || activeTab === "indexes";
@@ -813,6 +843,19 @@ export function DashboardView({ commodities, mag7, indexes, inflation, inflation
           >
             Bildspel
           </button>
+          <div className="flex flex-wrap items-center gap-2" aria-label="Tidsspann marknadsgrafer">
+            {marketRanges.map((rangeOption) => (
+              <button
+                key={`market-range-${rangeOption.id}`}
+                type="button"
+                className="tab-pill"
+                data-active={marketRange === rangeOption.id}
+                onClick={() => onMarketRangeChange?.(rangeOption.id)}
+              >
+                {rangeOption.label}
+              </button>
+            ))}
+          </div>
           <label className="sr-only" htmlFor="slideshow-interval">Bildspelsintervall</label>
           <select
             id="slideshow-interval"
@@ -969,19 +1012,7 @@ export function DashboardView({ commodities, mag7, indexes, inflation, inflation
         <section className="mt-8">
           <div className="flex items-center justify-between">
             <h2 className="section-title text-2xl">Inflation: Sverige & USA</h2>
-            <span className="kpi-subtle">Gemensam graf</span>
-          </div>
-          <div className="mt-5 flex flex-wrap gap-2">
-            {inflationRanges.map((rangeOption) => (
-              <button
-                key={`inflation-range-${rangeOption.id}`}
-                className="tab-pill"
-                data-active={inflationRange === rangeOption.id}
-                onClick={() => setInflationRange(rangeOption.id)}
-              >
-                {rangeOption.label}
-              </button>
-            ))}
+            <span className="kpi-subtle">12 mån</span>
           </div>
           {swedenInflationItem && usaInflationItem ? (
             <article className="card-surface mt-4 p-5" data-testid="inflation-shared-chart-panel">

@@ -180,6 +180,10 @@ def test_commodities_series_validates_range_and_uses_cache(client: TestClient, m
     assert cached.json()["meta"]["cached"] is True
     assert calls["count"] == 1
 
+    six_months = client.get("/api/commodities/series", params={"id": "brent", "range": "6m"})
+    assert six_months.status_code == 200
+    assert six_months.json()["range"] == "6m"
+
     invalid = client.get("/api/commodities/series", params={"id": "brent", "range": "10y"})
     assert invalid.status_code == 422
 
@@ -187,6 +191,64 @@ def test_commodities_series_validates_range_and_uses_cache(client: TestClient, m
 def test_commodities_series_unknown_id_returns_404(client: TestClient):
     response = client.get("/api/commodities/series", params={"id": "unknown-id", "range": "1m"})
     assert response.status_code == 404
+
+
+def test_mag7_series_validates_id_range_and_uses_cache(client: TestClient, monkeypatch):
+    now = datetime.now(timezone.utc)
+    calls = {"count": 0}
+
+    def fake_series(_instrument, _range):
+        calls["count"] += 1
+        return [SparkPoint(t=now - timedelta(days=1), v=120.0), SparkPoint(t=now, v=121.0)]
+
+    monkeypatch.setattr("app.routes.mag7.fetch_series_for_instrument", fake_series)
+
+    response = client.get("/api/mag7/series", params={"id": "aapl", "range": "6m"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["range"] == "6m"
+    assert len(payload["points"]) == 2
+    assert payload["meta"]["cached"] is False
+
+    cached = client.get("/api/mag7/series", params={"id": "aapl", "range": "6m"})
+    assert cached.status_code == 200
+    assert cached.json()["meta"]["cached"] is True
+    assert calls["count"] == 1
+
+    unknown = client.get("/api/mag7/series", params={"id": "unknown-id", "range": "6m"})
+    assert unknown.status_code == 404
+
+    invalid = client.get("/api/mag7/series", params={"id": "aapl", "range": "10y"})
+    assert invalid.status_code == 422
+
+
+def test_indexes_series_validates_id_range_and_uses_cache(client: TestClient, monkeypatch):
+    now = datetime.now(timezone.utc)
+    calls = {"count": 0}
+
+    def fake_series(_instrument, _range):
+        calls["count"] += 1
+        return [SparkPoint(t=now - timedelta(days=1), v=200.0), SparkPoint(t=now, v=201.0)]
+
+    monkeypatch.setattr("app.routes.indexes.fetch_series_for_instrument", fake_series)
+
+    response = client.get("/api/indexes/series", params={"id": "msci_acwi", "range": "3m"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["range"] == "3m"
+    assert len(payload["points"]) == 2
+    assert payload["meta"]["cached"] is False
+
+    cached = client.get("/api/indexes/series", params={"id": "msci_acwi", "range": "3m"})
+    assert cached.status_code == 200
+    assert cached.json()["meta"]["cached"] is True
+    assert calls["count"] == 1
+
+    unknown = client.get("/api/indexes/series", params={"id": "unknown-id", "range": "3m"})
+    assert unknown.status_code == 404
+
+    invalid = client.get("/api/indexes/series", params={"id": "msci_acwi", "range": "10y"})
+    assert invalid.status_code == 422
 
 
 def test_health_last_update_unchanged_when_all_items_stale(client: TestClient, monkeypatch):

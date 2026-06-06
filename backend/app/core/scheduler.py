@@ -25,7 +25,7 @@ from app.services.market_data import fetch_summary_for_instruments as fetch_mark
 logger = logging.getLogger(__name__)
 
 REFRESH_INTERVAL_SECONDS = 60
-COMMODITY_RANGES = ("1m", "3m", "1y")
+MARKET_RANGES = ("1m", "3m", "6m", "1y")
 INFLATION_RANGES = ("1m", "3m", "6m", "1y")
 
 
@@ -144,29 +144,35 @@ def _refresh_once_sync() -> None:
             fresh=inflation_fresh,
         )
 
-        for instrument in commodities:
-            for range_key in COMMODITY_RANGES:
-                try:
-                    points = fetch_market_series_for_instrument(instrument, range_key)
-                    cache.set(f"series:{instrument.id}:{range_key}", points, fetched_at=fetched_at, update_last_update=False)
-                    instrument_id = instrument_ids.get(instrument.id)
-                    if instrument_id is not None:
-                        replace_series_points(
-                            session,
-                            instrument_id=instrument_id,
-                            series_type="commodities",
-                            range_key=range_key,
-                            points=points,
+        for module, module_instruments in (("commodities", commodities), ("mag7", mag7), ("indexes", indexes)):
+            for instrument in module_instruments:
+                for range_key in MARKET_RANGES:
+                    try:
+                        points = fetch_market_series_for_instrument(instrument, range_key)
+                        cache.set(
+                            f"series:{module}:{instrument.id}:{range_key}",
+                            points,
                             fetched_at=fetched_at,
+                            update_last_update=False,
                         )
-                except Exception:
-                    fail_count += 1
-                    _log_exception(
-                        "scheduler.refresh.series_failed",
-                        module="commodities",
-                        instrument_id=instrument.id,
-                        range_key=range_key,
-                    )
+                        instrument_id = instrument_ids.get(instrument.id)
+                        if instrument_id is not None:
+                            replace_series_points(
+                                session,
+                                instrument_id=instrument_id,
+                                series_type=module,
+                                range_key=range_key,
+                                points=points,
+                                fetched_at=fetched_at,
+                            )
+                    except Exception:
+                        fail_count += 1
+                        _log_exception(
+                            "scheduler.refresh.series_failed",
+                            module=module,
+                            instrument_id=instrument.id,
+                            range_key=range_key,
+                        )
 
         for instrument in inflation:
             for range_key in INFLATION_RANGES:

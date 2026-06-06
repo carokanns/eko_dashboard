@@ -143,9 +143,9 @@ def test_scheduler_logs_structured_series_failures(monkeypatch, tmp_path):
     _refresh_once_sync()
 
     series_failures = [fields for event, fields in error_events if event == "scheduler.refresh.series_failed"]
-    assert len(series_failures) == 3
-    assert all(record["module"] == "commodities" for record in series_failures)
-    assert all(record["instrument_id"] == "brent" for record in series_failures)
+    assert len(series_failures) == 8
+    assert {record["module"] for record in series_failures} == {"commodities", "mag7"}
+    assert {record["instrument_id"] for record in series_failures} == {"brent", "aapl"}
 
     completion_events = [fields for event, fields in info_events if event == "scheduler.refresh.completed"]
     assert len(completion_events) == 1

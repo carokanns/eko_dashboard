@@ -33,9 +33,11 @@ export type SummaryResponse = {
   meta: ApiMeta;
 };
 
+export type MarketRange = "1m" | "3m" | "6m" | "1y";
+
 export type SeriesResponse = {
   id: string;
-  range: "1m" | "3m" | "6m" | "1y";
+  range: MarketRange;
   points: SparkPoint[];
   meta: ApiMeta;
 };
@@ -66,14 +68,24 @@ export function fetchInflationSummary(): Promise<SummaryResponse> {
   return fetchJson<SummaryResponse>("/inflation/summary");
 }
 
-export function fetchCommoditySeries(id: string, range: "1m" | "3m" | "1y" = "1m"): Promise<SeriesResponse> {
+export function fetchCommoditySeries(id: string, range: MarketRange = "1m"): Promise<SeriesResponse> {
   const query = new URLSearchParams({ id, range });
   return fetchJson<SeriesResponse>(`/commodities/series?${query.toString()}`);
 }
 
+export function fetchMag7Series(id: string, range: MarketRange = "1m"): Promise<SeriesResponse> {
+  const query = new URLSearchParams({ id, range });
+  return fetchJson<SeriesResponse>(`/mag7/series?${query.toString()}`);
+}
+
+export function fetchIndexSeries(id: string, range: MarketRange = "1m"): Promise<SeriesResponse> {
+  const query = new URLSearchParams({ id, range });
+  return fetchJson<SeriesResponse>(`/indexes/series?${query.toString()}`);
+}
+
 export function fetchInflationSeries(
   id: string,
-  range: "3m" | "6m" | "1y" = "1y",
+  range: MarketRange = "1y",
 ): Promise<SeriesResponse> {
   const query = new URLSearchParams({ id, range });
   return fetchJson<SeriesResponse>(`/inflation/series?${query.toString()}`);

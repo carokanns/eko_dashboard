@@ -34,11 +34,7 @@ const summary = {
   },
 };
 
-const inflationSeriesByRange: Record<"3m" | "6m" | "1y", Record<string, { t: string; v: number }[]>> = {
-  "3m": {},
-  "6m": {},
-  "1y": {},
-};
+const inflationSeries: Record<string, { t: string; v: number }[]> = {};
 
 function buildSummary(overrides?: Partial<(typeof summary)["meta"]>) {
   return {
@@ -56,7 +52,7 @@ test("renders dashboard with live values", () => {
       commodities={summary}
       mag7={summary}
       inflation={summary}
-      inflationSeriesByRange={inflationSeriesByRange}
+      inflationSeries={inflationSeries}
       warnings={[]}
     />,
   );
@@ -72,7 +68,7 @@ test("renders stale indicator and warning fallback", () => {
       commodities={null}
       mag7={null}
       inflation={null}
-      inflationSeriesByRange={inflationSeriesByRange}
+      inflationSeries={inflationSeries}
       warnings={["Kunde inte hamta ravaror just nu."]}
     />,
   );
@@ -105,7 +101,7 @@ test("renders both live and stale badges for partial commodity data", () => {
       commodities={mixed}
       mag7={summary}
       inflation={summary}
-      inflationSeriesByRange={inflationSeriesByRange}
+      inflationSeries={inflationSeries}
       warnings={[]}
     />,
   );
@@ -120,7 +116,7 @@ test("handles cached and invalid fetched_at without crashing", () => {
       commodities={cachedWithInvalidDate}
       mag7={null}
       inflation={null}
-      inflationSeriesByRange={inflationSeriesByRange}
+      inflationSeries={inflationSeries}
       warnings={[]}
     />,
   );
@@ -135,7 +131,7 @@ test("applies saved theme after mount", async () => {
       commodities={summary}
       mag7={summary}
       inflation={summary}
-      inflationSeriesByRange={inflationSeriesByRange}
+      inflationSeries={inflationSeries}
       warnings={[]}
     />,
   );
@@ -150,7 +146,7 @@ test("removes search box and shows status inside tabs", () => {
       commodities={summary}
       mag7={summary}
       inflation={summary}
-      inflationSeriesByRange={inflationSeriesByRange}
+      inflationSeries={inflationSeries}
       warnings={[]}
     />,
   );
@@ -175,7 +171,7 @@ test("sorts Mag7 table with sort controls", () => {
       commodities={summary}
       mag7={mag7}
       inflation={summary}
-      inflationSeriesByRange={inflationSeriesByRange}
+      inflationSeries={inflationSeries}
       warnings={[]}
     />,
   );
@@ -209,7 +205,7 @@ test("Mag 7 tab shows top 6 cards, selected chart and table", () => {
       commodities={summary}
       mag7={mag7}
       inflation={summary}
-      inflationSeriesByRange={inflationSeriesByRange}
+      inflationSeries={inflationSeries}
       warnings={[]}
     />,
   );
@@ -242,7 +238,7 @@ test("switches table content to Mag7 when Mag 7 tab is selected", () => {
       commodities={commodities}
       mag7={mag7}
       inflation={summary}
-      inflationSeriesByRange={inflationSeriesByRange}
+      inflationSeries={inflationSeries}
       warnings={[]}
     />,
   );
@@ -279,7 +275,7 @@ test("Index tab shows index cards and selected chart without table", () => {
       mag7={summary}
       indexes={indexes}
       inflation={summary}
-      inflationSeriesByRange={inflationSeriesByRange}
+      inflationSeries={inflationSeries}
       warnings={[]}
     />,
   );
@@ -308,7 +304,7 @@ test("clicking KPI card updates selected market chart panel", () => {
       commodities={commodities}
       mag7={summary}
       inflation={summary}
-      inflationSeriesByRange={inflationSeriesByRange}
+      inflationSeries={inflationSeries}
       warnings={[]}
     />,
   );
@@ -338,7 +334,7 @@ test("selected market chart shows weekly ticks and price levels", () => {
       commodities={commodities}
       mag7={summary}
       inflation={summary}
-      inflationSeriesByRange={inflationSeriesByRange}
+      inflationSeries={inflationSeries}
       warnings={[]}
     />,
   );
@@ -369,7 +365,7 @@ test("orders commodity KPI cards with gold silver copper first row and zinc firs
       commodities={commodities}
       mag7={summary}
       inflation={summary}
-      inflationSeriesByRange={inflationSeriesByRange}
+      inflationSeries={inflationSeries}
       warnings={[]}
     />,
   );
@@ -382,7 +378,27 @@ test("orders commodity KPI cards with gold silver copper first row and zinc firs
 });
 
 
-test("renders shared inflation graph and allows range switch", () => {
+test("renders market range selector with default range and change handler", () => {
+  const onMarketRangeChange = vi.fn();
+
+  render(
+    <DashboardView
+      commodities={summary}
+      mag7={summary}
+      inflation={summary}
+      marketRange="1m"
+      onMarketRangeChange={onMarketRangeChange}
+      inflationSeries={inflationSeries}
+      warnings={[]}
+    />,
+  );
+
+  expect(screen.getByRole("button", { name: "1 mån" })).toHaveAttribute("data-active", "true");
+  fireEvent.click(screen.getByRole("button", { name: "6 mån" }));
+  expect(onMarketRangeChange).toHaveBeenCalledWith("6m");
+});
+
+test("renders shared inflation graph with fixed twelve month series", () => {
   const inflation = {
     ...summary,
     items: [
@@ -390,19 +406,9 @@ test("renders shared inflation graph and allows range switch", () => {
       { ...summary.items[0], id: "inflation_us", name: "USA KPI" },
     ],
   };
-  const rangeSeries = {
-    "3m": {
-      inflation_se: [{ t: "2026-01-01T00:00:00Z", v: 1.0 }, { t: "2026-02-01T00:00:00Z", v: 1.2 }],
-      inflation_us: [{ t: "2026-01-01T00:00:00Z", v: 2.0 }, { t: "2026-02-01T00:00:00Z", v: 2.1 }],
-    },
-    "6m": {
-      inflation_se: [{ t: "2025-08-01T00:00:00Z", v: 0.8 }, { t: "2026-02-01T00:00:00Z", v: 1.2 }],
-      inflation_us: [{ t: "2025-08-01T00:00:00Z", v: 1.9 }, { t: "2026-02-01T00:00:00Z", v: 2.1 }],
-    },
-    "1y": {
-      inflation_se: [{ t: "2025-02-01T00:00:00Z", v: 0.6 }, { t: "2026-02-01T00:00:00Z", v: 1.2 }],
-      inflation_us: [{ t: "2025-02-01T00:00:00Z", v: 1.7 }, { t: "2026-02-01T00:00:00Z", v: 2.1 }],
-    },
+  const fixedInflationSeries = {
+    inflation_se: [{ t: "2025-02-01T00:00:00Z", v: 0.6 }, { t: "2026-02-01T00:00:00Z", v: 1.2 }],
+    inflation_us: [{ t: "2025-02-01T00:00:00Z", v: 1.7 }, { t: "2026-02-01T00:00:00Z", v: 2.1 }],
   };
 
   render(
@@ -410,7 +416,7 @@ test("renders shared inflation graph and allows range switch", () => {
       commodities={summary}
       mag7={summary}
       inflation={inflation}
-      inflationSeriesByRange={rangeSeries}
+      inflationSeries={fixedInflationSeries}
       warnings={[]}
     />,
   );
@@ -420,11 +426,8 @@ test("renders shared inflation graph and allows range switch", () => {
   expect(screen.getByTestId("inflation-shared-chart-panel")).toBeInTheDocument();
   expect(screen.getByTestId("inflation-line-sweden")).toBeInTheDocument();
   expect(screen.getByTestId("inflation-line-usa")).toBeInTheDocument();
-
-  fireEvent.click(screen.getByRole("button", { name: "6 man" }));
-  expect(screen.getByRole("button", { name: "6 man" })).toHaveAttribute("data-active", "true");
-  fireEvent.click(screen.getByRole("button", { name: "12 man" }));
-  expect(screen.getByRole("button", { name: "12 man" })).toHaveAttribute("data-active", "true");
+  expect(screen.queryByRole("button", { name: "6 man" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "12 man" })).not.toBeInTheDocument();
 });
 
 test("opens slideshow with interval choice, table rows and controls", () => {
@@ -446,13 +449,9 @@ test("opens slideshow with interval choice, table rows and controls", () => {
       { ...summary.items[0], id: "inflation_us", name: "USA KPI" },
     ],
   };
-  const rangeSeries = {
-    "3m": {},
-    "6m": {},
-    "1y": {
-      inflation_se: [{ t: "2025-02-01T00:00:00Z", v: 0.6 }, { t: "2026-02-01T00:00:00Z", v: 1.2 }],
-      inflation_us: [{ t: "2025-02-01T00:00:00Z", v: 1.7 }, { t: "2026-02-01T00:00:00Z", v: 2.1 }],
-    },
+  const fixedInflationSeries = {
+    inflation_se: [{ t: "2025-02-01T00:00:00Z", v: 0.6 }, { t: "2026-02-01T00:00:00Z", v: 1.2 }],
+    inflation_us: [{ t: "2025-02-01T00:00:00Z", v: 1.7 }, { t: "2026-02-01T00:00:00Z", v: 2.1 }],
   };
 
   render(
@@ -464,7 +463,7 @@ test("opens slideshow with interval choice, table rows and controls", () => {
         items: [{ ...summary.items[0], id: "msci_acwi", name: "MSCI ACWI" }],
       }}
       inflation={inflation}
-      inflationSeriesByRange={rangeSeries}
+      inflationSeries={fixedInflationSeries}
       warnings={[]}
     />,
   );

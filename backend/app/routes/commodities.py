@@ -52,8 +52,8 @@ def commodities_summary():
 
 
 @router.get("/series")
-def commodities_series(id: str, range: str = Query(default="1m", pattern="^(1m|3m|1y)$")):
-    cache_key = f"series:{id}:{range}"
+def commodities_series(id: str, range: str = Query(default="1m", pattern="^(1m|3m|6m|1y)$")):
+    cache_key = f"series:commodities:{id}:{range}"
     cached = cache.get(cache_key)
     if cached is not None:
         global_stale = cache.is_globally_stale()
