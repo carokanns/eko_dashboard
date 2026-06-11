@@ -209,6 +209,16 @@ instruments:
     display_group: cards
     sort_order: 8
     module: indexes
+  - id: uranium_miners
+    name_sv: Uranium Miners
+    ticker: URNM
+    unit_label: USD
+    price_type: Sprott Uranium Miners ETF
+    badge_symbol: URNM
+    precision: 2
+    display_group: cards
+    sort_order: 9
+    module: indexes
   - id: us_10y_yield
     name_sv: US 10Y-ränta
     ticker: ^TNX
@@ -217,7 +227,7 @@ instruments:
     badge_symbol: 10Y
     precision: 2
     display_group: cards
-    sort_order: 9
+    sort_order: 10
     module: indexes
   - id: dxy
     name_sv: DXY / USD-index
@@ -227,7 +237,7 @@ instruments:
     badge_symbol: DXY
     precision: 2
     display_group: cards
-    sort_order: 10
+    sort_order: 11
     module: indexes
   - id: vix
     name_sv: VIX
@@ -237,7 +247,7 @@ instruments:
     badge_symbol: VIX
     precision: 2
     display_group: cards
-    sort_order: 11
+    sort_order: 12
     module: indexes
   - id: inflation_se
     name_sv: Sverige KPI (YoY)
