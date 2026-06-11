@@ -12,6 +12,9 @@ import {
   fetchInflationSummary,
   fetchMag7Series,
   fetchMag7Summary,
+  fetchPortfolioSeries,
+  fetchPortfolioStatus,
+  fetchPortfolioSummary,
   type MarketRange,
   type SparkPoint,
 } from "@/lib/api";
@@ -39,6 +42,19 @@ export function DashboardPage() {
   const inflationQuery = useQuery({
     queryKey: ["summary", "inflation"],
     queryFn: fetchInflationSummary,
+  });
+
+  const portfolioStatusQuery = useQuery({
+    queryKey: ["portfolio", "status"],
+    queryFn: fetchPortfolioStatus,
+    retry: false,
+  });
+
+  const portfolioQuery = useQuery({
+    queryKey: ["summary", "portfolio"],
+    queryFn: fetchPortfolioSummary,
+    enabled: portfolioStatusQuery.data?.enabled === true,
+    retry: false,
   });
 
   const inflationIds = useMemo(
@@ -90,6 +106,33 @@ export function DashboardPage() {
     },
   });
 
+  const portfolioIds = useMemo(
+    () => (portfolioQuery.data?.holdings ?? []).filter((item) => item.has_chart).map((item) => item.id),
+    [portfolioQuery.data?.holdings],
+  );
+
+  const portfolioSeriesQuery = useQuery({
+    queryKey: ["portfolio-series", marketRange, portfolioIds],
+    enabled: portfolioIds.length > 0,
+    queryFn: async () => {
+      const results: Record<string, SparkPoint[]> = {};
+      let failedCount = 0;
+
+      await Promise.all(
+        portfolioIds.map(async (id) => {
+          try {
+            const series = await fetchPortfolioSeries(id, marketRange);
+            results[id] = series.points;
+          } catch {
+            failedCount += 1;
+          }
+        }),
+      );
+
+      return { series: results, failedCount };
+    },
+  });
+
   const inflationSeriesQuery = useQuery({
     queryKey: ["inflation-series", inflationIds],
     enabled: inflationIds.length > 0,
@@ -118,6 +161,8 @@ export function DashboardPage() {
   if (indexesQuery.isError) warnings.push("Kunde inte hamta index just nu.");
   if (inflationQuery.isError) warnings.push("Kunde inte hamta inflation just nu.");
   if (marketSeriesQuery.data?.failedCount) warnings.push("Vissa marknadsserier kunde inte hamtas.");
+  if (portfolioQuery.isError) warnings.push("Kunde inte hamta Min Avanza just nu.");
+  if (portfolioSeriesQuery.data?.failedCount) warnings.push("Vissa portfoliografer kunde inte hamtas.");
   if (inflationSeriesQuery.data?.failedCount) warnings.push("Vissa inflationsserier kunde inte hamtas.");
 
   return (
@@ -126,9 +171,11 @@ export function DashboardPage() {
       mag7={mag7Query.data ?? null}
       indexes={indexesQuery.data ?? null}
       inflation={inflationQuery.data ?? null}
+      portfolio={portfolioQuery.data ?? null}
       marketRange={marketRange}
       onMarketRangeChange={setMarketRange}
       marketSeriesByModule={marketSeriesQuery.data?.series ?? { commodities: {}, mag7: {}, indexes: {} }}
+      portfolioSeries={portfolioSeriesQuery.data?.series ?? {}}
       inflationSeries={inflationSeriesQuery.data?.series ?? {}}
       warnings={warnings}
     />

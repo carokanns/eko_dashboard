@@ -29,3 +29,8 @@ def app_api_token() -> str | None:
     raw = os.getenv("APP_API_TOKEN")
     token = raw.strip() if raw else ""
     return token or None
+
+
+def local_portfolio_enabled() -> bool:
+    raw = os.getenv("ENABLE_LOCAL_PORTFOLIO", "")
+    return raw.strip().lower() in {"1", "true", "yes", "on"}

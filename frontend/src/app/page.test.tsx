@@ -156,6 +156,107 @@ test("removes search box and shows status inside tabs", () => {
   expect(screen.getByRole("button", { name: "Mag 7" })).toHaveTextContent("Mag 7: Fresh");
   expect(screen.getByRole("button", { name: "Index" })).toHaveTextContent("Index: Offline");
   expect(screen.getByRole("button", { name: "Inflation" })).toHaveTextContent("Inflation: Fresh");
+  expect(screen.queryByRole("button", { name: "Min Avanza" })).not.toBeInTheDocument();
+});
+
+test("shows Min Avanza tab with portfolio cards and value text when enabled", () => {
+  const portfolio = {
+    enabled: true,
+    holdings: [
+      {
+        id: "se0000000001",
+        name: "Exempelbolag B",
+        short_name: "EX B",
+        isin: "SE0000000001",
+        instrument_type: "STOCK",
+        market: "XSTO",
+        currency: "SEK",
+        quantity: 10,
+        current_value: 1500.5,
+        acquisition_price_sek: 100,
+        acquisition_value: 1000,
+        gain_abs: 500.5,
+        gain_pct: 50.05,
+        ticker: "EX-B.ST",
+        chart_source: "direct",
+        chart_label: null,
+        has_chart: true,
+        last: 150,
+        day_abs: 1,
+        day_pct: 0.67,
+        w1_pct: 2,
+        ytd_pct: 3,
+        y1_pct: 4,
+        timestamp_local: "2026-02-07T10:00:00Z",
+        is_stale: false,
+        sparkline: [
+          { t: "2026-02-06T10:00:00Z", v: 145 },
+          { t: "2026-02-07T10:00:00Z", v: 150 },
+        ],
+      },
+      {
+        id: "se0000000002",
+        name: "Exempelfond",
+        short_name: "Exempelfond",
+        isin: "SE0000000002",
+        instrument_type: "FUND",
+        market: "FUND",
+        currency: "SEK",
+        quantity: 2.5,
+        current_value: 250,
+        acquisition_price_sek: 80,
+        acquisition_value: 200,
+        gain_abs: 50,
+        gain_pct: 25,
+        ticker: null,
+        chart_source: null,
+        chart_label: null,
+        has_chart: false,
+        last: null,
+        day_abs: null,
+        day_pct: null,
+        w1_pct: null,
+        ytd_pct: null,
+        y1_pct: null,
+        timestamp_local: null,
+        is_stale: true,
+        sparkline: [],
+      },
+    ],
+    totals: {
+      current_value: 1750.5,
+      acquisition_value: 1200,
+      gain_abs: 550.5,
+      gain_pct: 45.88,
+      holding_count: 2,
+      chart_count: 1,
+    },
+    meta: {
+      source: "local_avanza_export",
+      cached: false,
+      fetched_at: "2026-02-07T10:00:00Z",
+    },
+  };
+
+  render(
+    <DashboardView
+      commodities={summary}
+      mag7={summary}
+      inflation={summary}
+      portfolio={portfolio}
+      inflationSeries={inflationSeries}
+      warnings={[]}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Min Avanza" }));
+  expect(screen.getByText("Min Avanza")).toBeInTheDocument();
+  expect(screen.getByText("1 751 kr")).toBeInTheDocument();
+  expect(screen.getByTestId("portfolio-card-se0000000001")).toBeInTheDocument();
+  expect(screen.getByTestId("portfolio-card-se0000000002")).toBeInTheDocument();
+  expect(screen.getByTestId("selected-portfolio-chart-panel")).toBeInTheDocument();
+  expect(screen.getByText("Nuvarande värde:")).toBeInTheDocument();
+  expect(screen.getByText("Inköpsvärde:")).toBeInTheDocument();
 });
 
 test("sorts Mag7 table with sort controls", () => {

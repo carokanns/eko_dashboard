@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { MarketRange, SparkPoint, SummaryItem, SummaryResponse } from "@/lib/api";
+import type { MarketRange, PortfolioHolding, PortfolioSummaryResponse, SparkPoint, SummaryItem, SummaryResponse } from "@/lib/api";
 
 const tabs = [
   { id: "commodities", label: "Råvaror" },
   { id: "mag7", label: "Mag 7" },
   { id: "indexes", label: "Index" },
   { id: "inflation", label: "Inflation" },
+  { id: "portfolio", label: "Min Avanza" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -18,9 +19,11 @@ type DashboardViewProps = {
   mag7: SummaryResponse | null;
   indexes?: SummaryResponse | null;
   inflation: SummaryResponse | null;
+  portfolio?: PortfolioSummaryResponse | null;
   marketRange?: MarketRange;
   onMarketRangeChange?: (range: MarketRange) => void;
   marketSeriesByModule?: Record<"commodities" | "mag7" | "indexes", Record<string, SparkPoint[]>>;
+  portfolioSeries?: Record<string, SparkPoint[]>;
   inflationSeries: Record<string, SparkPoint[]>;
   warnings: string[];
 };
@@ -33,6 +36,12 @@ type SlideshowSlide =
       type: "market";
       group: "Råvaror" | "Mag 7" | "Index";
       item: SummaryItem;
+    }
+  | {
+      id: string;
+      type: "portfolio";
+      group: "Min Avanza";
+      holding: PortfolioHolding;
     }
   | {
       id: string;
@@ -53,6 +62,7 @@ const marketRanges: Array<{ id: MarketRange; label: string }> = [
 ];
 
 const EMPTY_ITEMS: SummaryItem[] = [];
+const EMPTY_PORTFOLIO_ITEMS: PortfolioHolding[] = [];
 const SLIDESHOW_LOG_KEY = "dashboard-slideshow-log";
 const SLIDESHOW_LOG_LIMIT = 2000;
 
@@ -123,6 +133,14 @@ function formatValue(value: number | null, precision = 2): string {
   return value.toFixed(precision);
 }
 
+function formatSek(value: number | null, precision = 0): string {
+  if (value === null) return "--";
+  return `${value.toLocaleString("sv-SE", {
+    minimumFractionDigits: precision,
+    maximumFractionDigits: precision,
+  })} kr`;
+}
+
 function formatPercent(value: number | null): string {
   if (value === null) return "--";
   const sign = value > 0 ? "+" : "";
@@ -163,7 +181,7 @@ function formatTimestampCell(timestamp: string | null | undefined): string {
   return date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
 }
 
-function getModuleStatus(items: SummaryItem[]): ModuleStatus {
+function getModuleStatus(items: Array<{ is_stale: boolean }>): ModuleStatus {
   if (items.length === 0) return "offline";
   const staleCount = items.filter((item) => item.is_stale).length;
   if (staleCount === 0) return "fresh";
@@ -239,6 +257,14 @@ function withSeriesFallback(items: SummaryItem[], seriesById: Record<string, Spa
     const points = seriesById[item.id];
     if (!points || points.length === 0) return item;
     return { ...item, sparkline: points };
+  });
+}
+
+function portfolioWithSeriesFallback(items: PortfolioHolding[], seriesById: Record<string, SparkPoint[]>): PortfolioHolding[] {
+  return items.map((item) => {
+    const points = seriesById[item.id];
+    if (!points || points.length === 0) return item;
+    return { ...item, sparkline: points, has_chart: true };
   });
 }
 
@@ -475,6 +501,25 @@ function SlideshowOverlay({
                 </div>
                 <Sparkline points={activeSlide.item.sparkline} heightClass="h-[55vh]" showXAxis />
               </>
+            ) : activeSlide.type === "portfolio" ? (
+              <>
+                <div className="slideshow-heading">
+                  <div>
+                    <h3 className="section-title text-5xl">{activeSlide.holding.name}</h3>
+                    <p className="text-muted mt-2 text-sm">
+                      {activeSlide.group} • {activeSlide.holding.ticker ?? "--"} • {activeSlide.holding.instrument_type}
+                    </p>
+                  </div>
+                  <div className="slideshow-value-block">
+                    <div className="kpi-subtle">Nuvarande värde</div>
+                    <div className="slideshow-value">{formatSek(activeSlide.holding.current_value)}</div>
+                    <div className={`text-lg font-semibold ${changeToneClass(activeSlide.holding.gain_pct)}`}>
+                      Inköpsvärde {formatSek(activeSlide.holding.acquisition_value)} • {formatPercent(activeSlide.holding.gain_pct)}
+                    </div>
+                  </div>
+                </div>
+                <Sparkline points={activeSlide.holding.sparkline} heightClass="h-[55vh]" showXAxis />
+              </>
             ) : (
               <>
                 <div className="slideshow-heading">
@@ -523,6 +568,7 @@ function SlideshowOverlay({
 function sourceDisplayName(source: string): string {
   if (source === "yahoo_finance") return "Yahoo";
   if (source === "fred") return "FRED";
+  if (source === "local_avanza_export") return "Avanza CSV";
   return source;
 }
 
@@ -540,9 +586,11 @@ export function DashboardView({
   mag7,
   indexes,
   inflation,
+  portfolio,
   marketRange = "1m",
   onMarketRangeChange,
   marketSeriesByModule = { commodities: {}, mag7: {}, indexes: {} },
+  portfolioSeries = {},
   inflationSeries,
   warnings,
 }: DashboardViewProps) {
@@ -582,21 +630,25 @@ export function DashboardView({
   const mag7Items = mag7?.items ?? EMPTY_ITEMS;
   const indexItems = indexes?.items ?? EMPTY_ITEMS;
   const inflationItems = inflation?.items ?? EMPTY_ITEMS;
+  const portfolioItems = portfolio?.holdings ?? EMPTY_PORTFOLIO_ITEMS;
+  const hasPortfolio = portfolio?.enabled === true;
 
   const commodityStatus = getModuleStatus(commodityItems);
   const mag7Status = getModuleStatus(mag7Items);
   const indexStatus = getModuleStatus(indexItems);
   const inflationStatus = getModuleStatus(inflationItems);
+  const portfolioStatus = getModuleStatus(portfolioItems);
   const tabStatuses: Record<TabId, ModuleStatus> = {
     commodities: commodityStatus,
     mag7: mag7Status,
     indexes: indexStatus,
     inflation: inflationStatus,
+    portfolio: portfolioStatus,
   };
-  const latestUpdate = commodities?.meta.fetched_at ?? mag7?.meta.fetched_at ?? indexes?.meta.fetched_at ?? inflation?.meta.fetched_at;
+  const latestUpdate = commodities?.meta.fetched_at ?? mag7?.meta.fetched_at ?? indexes?.meta.fetched_at ?? inflation?.meta.fetched_at ?? portfolio?.meta.fetched_at;
   const sourceNames = Array.from(
     new Set(
-      [commodities?.meta.source, mag7?.meta.source, indexes?.meta.source, inflation?.meta.source]
+      [commodities?.meta.source, mag7?.meta.source, indexes?.meta.source, inflation?.meta.source, portfolio?.meta.source]
         .filter((source): source is string => Boolean(source))
         .map(sourceDisplayName),
     ),
@@ -615,6 +667,10 @@ export function DashboardView({
     () => withSeriesFallback(indexItems, marketSeriesByModule.indexes),
     [indexItems, marketSeriesByModule.indexes],
   );
+  const filteredPortfolioItems = useMemo(
+    () => portfolioWithSeriesFallback(portfolioItems, portfolioSeries),
+    [portfolioItems, portfolioSeries],
+  );
 
   const swedenInflationItem = inflationItems.find((item) => item.id.includes("se")) ?? null;
   const usaInflationItem = inflationItems.find((item) => item.id.includes("us")) ?? null;
@@ -631,6 +687,8 @@ export function DashboardView({
   const showMag7Table = activeTab === "mag7";
   const showIndexCards = activeTab === "indexes";
   const showInflation = activeTab === "inflation";
+  const showPortfolio = activeTab === "portfolio" && hasPortfolio;
+  const visibleTabs = hasPortfolio ? tabs : tabs.filter((tab) => tab.id !== "portfolio");
 
   const kpiItems = showMag7Table ? topMag7Cards(filteredMag7Items) : showIndexCards ? filteredIndexItems : filteredCommodityItems;
   const kpiTitle = showMag7Table ? "Magnificent 7" : showIndexCards ? "Index" : "Råvaror";
@@ -645,6 +703,7 @@ export function DashboardView({
   const tableEmptyText = showMag7Table ? "Data kunde inte laddas for Mag 7." : "Data kunde inte laddas for ravaror.";
   const tableGridClass = showMag7Table ? "grid-cols-7" : "grid-cols-8";
   const selectedMarketChart = kpiItems.find((item) => item.id === selectedMarketChartId) ?? kpiItems[0] ?? null;
+  const selectedPortfolioHolding = filteredPortfolioItems.find((item) => item.id === selectedMarketChartId) ?? filteredPortfolioItems[0] ?? null;
   const slideshowSlides: SlideshowSlide[] = useMemo(
     () => [
       ...filteredCommodityItems.map((item) => ({
@@ -665,6 +724,14 @@ export function DashboardView({
         group: "Index" as const,
         item,
       })),
+      ...filteredPortfolioItems
+        .filter((holding) => holding.has_chart && holding.sparkline.length >= 2)
+        .map((holding) => ({
+          id: `portfolio-${holding.id}`,
+          type: "portfolio" as const,
+          group: "Min Avanza" as const,
+          holding,
+        })),
       ...(swedenInflationItem && usaInflationItem
         ? [
             {
@@ -680,7 +747,7 @@ export function DashboardView({
           ]
         : []),
     ],
-    [filteredCommodityItems, filteredIndexItems, filteredMag7Items, swedenInflationItem, swedenInflationPoints, usaInflationItem, usaInflationPoints],
+    [filteredCommodityItems, filteredIndexItems, filteredMag7Items, filteredPortfolioItems, swedenInflationItem, swedenInflationPoints, usaInflationItem, usaInflationPoints],
   );
   const safeSlideshowIndex = slideshowSlides.length > 0 ? Math.min(slideshowIndex, slideshowSlides.length - 1) : 0;
   const activeSlideshowSlide = slideshowSlides[safeSlideshowIndex] ?? null;
@@ -823,7 +890,7 @@ export function DashboardView({
 
       <section className="mt-6 card-surface p-4">
         <div className="flex flex-wrap items-center gap-2">
-          {tabs.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               className="tab-pill"
@@ -930,6 +997,81 @@ export function DashboardView({
               </article>
             ) : (
               <div className="card-surface text-muted mt-4 p-5 text-sm">Ingen grafdata tillgänglig.</div>
+            )}
+          </section>
+        </>
+      ) : null}
+
+      {showPortfolio ? (
+        <>
+          <section className="mt-8">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="section-title text-2xl">Min Avanza</h2>
+                <div className="text-muted mt-2 text-sm">
+                  Totalt: <span className="text-strong font-semibold">{formatSek(portfolio.totals.current_value)}</span>
+                  {" "}• Inköpsvärde: <span className="text-strong font-semibold">{formatSek(portfolio.totals.acquisition_value)}</span>
+                  {" "}• Resultat: <span className={changeToneClass(portfolio.totals.gain_pct)}>{formatSek(portfolio.totals.gain_abs)} ({formatPercent(portfolio.totals.gain_pct)})</span>
+                </div>
+              </div>
+              <span className="kpi-subtle">{portfolio.totals.holding_count} innehav • {portfolio.totals.chart_count} grafer</span>
+            </div>
+            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {filteredPortfolioItems.map((holding) => (
+                <button
+                  key={holding.id}
+                  type="button"
+                  data-testid={`portfolio-card-${holding.id}`}
+                  className="card-surface commodity-card kpi-card-80 p-4 text-left transition-transform hover:-translate-y-0.5"
+                  data-active={selectedPortfolioHolding?.id === holding.id}
+                  onClick={() => setSelectedMarketChartId(holding.id)}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">{holding.name}</div>
+                      <div className="text-xs kpi-subtle">{holding.instrument_type} • {holding.chart_label ?? holding.ticker ?? "Ingen graf"}</div>
+                    </div>
+                    <span className="badge">{holding.has_chart ? "Graf" : "Värde"}</span>
+                  </div>
+                  <div className="mt-5 kpi-value">{formatSek(holding.current_value)}</div>
+                  <div className={`mt-2 text-sm kpi-change ${changeToneClass(holding.gain_pct)}`}>
+                    {formatSek(holding.gain_abs)} ({formatPercent(holding.gain_pct)})
+                  </div>
+                  <Sparkline points={holding.sparkline} heightClass="h-16" />
+                </button>
+              ))}
+              {filteredPortfolioItems.length === 0 ? (
+                <div className="card-surface text-muted p-5 text-sm">Ingen portfoliodata tillgänglig.</div>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="mt-8">
+            <div className="flex items-center justify-between">
+              <h2 className="section-title text-2xl">Vald graf</h2>
+              <span className="kpi-subtle">Klicka pa en ruta for att byta</span>
+            </div>
+            {selectedPortfolioHolding ? (
+              <article className="card-surface mt-4 p-6" data-testid="selected-portfolio-chart-panel">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold">{selectedPortfolioHolding.name}</h3>
+                    <p className="text-muted text-xs">
+                      {selectedPortfolioHolding.quantity.toLocaleString("sv-SE")} st/andelar • {selectedPortfolioHolding.chart_label ?? selectedPortfolioHolding.ticker ?? "ingen ticker"} • {selectedPortfolioHolding.instrument_type}
+                    </p>
+                  </div>
+                  <span className="badge">{selectedPortfolioHolding.has_chart ? "Graf" : "Endast värde"}</span>
+                </div>
+                <div className="text-muted mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+                  <span>Nuvarande värde: <span className="text-strong font-semibold">{formatSek(selectedPortfolioHolding.current_value)}</span></span>
+                  <span>Inköpsvärde: <span className="text-strong font-semibold">{formatSek(selectedPortfolioHolding.acquisition_value)}</span></span>
+                  <span>Resultat: <span className={changeToneClass(selectedPortfolioHolding.gain_pct)}>{formatSek(selectedPortfolioHolding.gain_abs)} ({formatPercent(selectedPortfolioHolding.gain_pct)})</span></span>
+                  {selectedPortfolioHolding.chart_source === "proxy" ? <span>Graf: <span className="text-strong font-semibold">proxy</span></span> : null}
+                </div>
+                <Sparkline points={selectedPortfolioHolding.sparkline} heightClass="h-56" showXAxis />
+              </article>
+            ) : (
+              <div className="card-surface text-muted mt-4 p-5 text-sm">Ingen portfoliodata tillgänglig.</div>
             )}
           </section>
         </>

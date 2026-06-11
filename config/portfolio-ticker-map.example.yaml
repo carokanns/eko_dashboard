@@ -1,0 +1,7 @@
+# Copy this file to local-data/avanza/ticker-map.yaml and edit it locally.
+# Keep the local file out of Git. Do not put Avanza login details or secrets here.
+mappings:
+  - isin: EXAMPLE0000001
+    ticker: EXAMPLE.ST
+    source: manual
+    label: Example manual mapping

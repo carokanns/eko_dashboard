@@ -19,6 +19,9 @@ backend/.pytest_cache/
 .env
 .env.*
 
+# Local private data
+local-data/
+
 # Runtime
 .run/
 backend/.run/

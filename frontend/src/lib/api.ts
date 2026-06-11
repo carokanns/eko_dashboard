@@ -42,6 +42,58 @@ export type SeriesResponse = {
   meta: ApiMeta;
 };
 
+export type PortfolioStatus = {
+  enabled: boolean;
+  configured: boolean;
+  has_data: boolean;
+};
+
+export type PortfolioHolding = {
+  id: string;
+  name: string;
+  short_name: string | null;
+  isin: string | null;
+  instrument_type: string;
+  market: string | null;
+  currency: string | null;
+  quantity: number;
+  current_value: number;
+  acquisition_price_sek: number | null;
+  acquisition_value: number | null;
+  gain_abs: number | null;
+  gain_pct: number | null;
+  ticker: string | null;
+  chart_source: string | null;
+  chart_label: string | null;
+  has_chart: boolean;
+  last: number | null;
+  day_abs: number | null;
+  day_pct: number | null;
+  w1_pct: number | null;
+  ytd_pct: number | null;
+  y1_pct: number | null;
+  timestamp_local: string | null;
+  is_stale: boolean;
+  sparkline: SparkPoint[];
+};
+
+export type PortfolioSummaryResponse = {
+  enabled: boolean;
+  holdings: PortfolioHolding[];
+  totals: {
+    current_value: number;
+    acquisition_value: number;
+    gain_abs: number;
+    gain_pct: number | null;
+    holding_count: number;
+    chart_count: number;
+  };
+  meta: ApiMeta & {
+    data_dir?: string;
+    source_file?: string | null;
+  };
+};
+
 const baseUrl = "/api/dashboard";
 
 async function fetchJson<T>(path: string): Promise<T> {
@@ -89,4 +141,17 @@ export function fetchInflationSeries(
 ): Promise<SeriesResponse> {
   const query = new URLSearchParams({ id, range });
   return fetchJson<SeriesResponse>(`/inflation/series?${query.toString()}`);
+}
+
+export function fetchPortfolioStatus(): Promise<PortfolioStatus> {
+  return fetchJson<PortfolioStatus>("/portfolio/status");
+}
+
+export function fetchPortfolioSummary(): Promise<PortfolioSummaryResponse> {
+  return fetchJson<PortfolioSummaryResponse>("/portfolio/summary");
+}
+
+export function fetchPortfolioSeries(id: string, range: MarketRange = "1m"): Promise<SeriesResponse> {
+  const query = new URLSearchParams({ id, range });
+  return fetchJson<SeriesResponse>(`/portfolio/series?${query.toString()}`);
 }

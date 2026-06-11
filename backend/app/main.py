@@ -15,6 +15,7 @@ from app.routes.commodities import router as commodities_router
 from app.routes.indexes import router as indexes_router
 from app.routes.inflation import router as inflation_router
 from app.routes.mag7 import router as mag7_router
+from app.routes.portfolio import router as portfolio_router
 
 
 @asynccontextmanager
@@ -46,6 +47,7 @@ app.include_router(mag7_router)
 app.include_router(indexes_router)
 app.include_router(inflation_router)
 app.include_router(config_router)
+app.include_router(portfolio_router)
 
 
 @app.get("/api/health")
