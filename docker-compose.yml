@@ -5,9 +5,9 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       ENABLE_LOCAL_PORTFOLIO: "1"
-      LOCAL_PORTFOLIO_DATA_DIR: /app/local-data/avanza
+      LOCAL_PORTFOLIO_BASE_DIR: /app/local-data
     volumes:
-      - ./local-data/avanza:/app/local-data/avanza
+      - ./local-data:/app/local-data
     restart: unless-stopped
     expose:
       - "8000"

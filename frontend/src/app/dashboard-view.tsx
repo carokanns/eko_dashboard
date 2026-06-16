@@ -160,6 +160,18 @@ function formatAbsAndPercent(dayAbs: number | null, dayPct: number | null): stri
   return `${formatSignedValue(dayAbs)} (${formatPercent(dayPct)})`;
 }
 
+function formatOwnerSekValues(holding: PortfolioHolding, field: "current_value" | "acquisition_value"): string {
+  if (!holding.owners.length) return formatSek(holding[field]);
+  return holding.owners.map((owner) => formatSek(owner[field])).join(", ");
+}
+
+function formatOwnerAcquisitionValues(holding: PortfolioHolding): string {
+  if (!holding.owners.length) return formatSek(holding.acquisition_value);
+  return holding.owners
+    .map((owner) => `${formatSek(owner.acquisition_value)} (${formatPercent(owner.gain_pct)})`)
+    .join(", ");
+}
+
 function changeToneClass(value: number | null): string {
   if (value === null) return "change-neutral";
   if (value > 0) return "change-positive";
@@ -514,8 +526,18 @@ function SlideshowOverlay({
                     <div className="kpi-subtle">Nuvarande värde</div>
                     <div className="slideshow-value">{formatSek(activeSlide.holding.current_value)}</div>
                     <div className={`text-lg font-semibold ${changeToneClass(activeSlide.holding.gain_pct)}`}>
-                      Inköpsvärde {formatSek(activeSlide.holding.acquisition_value)} • {formatPercent(activeSlide.holding.gain_pct)}
+                      Inköpsvärde {formatSek(activeSlide.holding.acquisition_value)} ({formatPercent(activeSlide.holding.gain_pct)})
                     </div>
+                    {activeSlide.holding.owners.length ? (
+                      <div className="text-muted text-base font-semibold">
+                        {formatOwnerSekValues(activeSlide.holding, "current_value")}
+                      </div>
+                    ) : null}
+                    {activeSlide.holding.owners.length ? (
+                      <div className="text-muted text-sm">
+                        {formatOwnerAcquisitionValues(activeSlide.holding)}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
                 <Sparkline points={activeSlide.holding.sparkline} heightClass="h-[55vh]" showXAxis />
@@ -1063,8 +1085,8 @@ export function DashboardView({
                   <span className="badge">{selectedPortfolioHolding.has_chart ? "Graf" : "Endast värde"}</span>
                 </div>
                 <div className="text-muted mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
-                  <span>Nuvarande värde: <span className="text-strong font-semibold">{formatSek(selectedPortfolioHolding.current_value)}</span></span>
-                  <span>Inköpsvärde: <span className="text-strong font-semibold">{formatSek(selectedPortfolioHolding.acquisition_value)}</span></span>
+                  <span>Nuvarande värde: <span className="text-strong font-semibold">{formatOwnerSekValues(selectedPortfolioHolding, "current_value")}</span></span>
+                  <span>Inköpsvärde: <span className="text-strong font-semibold">{formatOwnerAcquisitionValues(selectedPortfolioHolding)}</span></span>
                   <span>Resultat: <span className={changeToneClass(selectedPortfolioHolding.gain_pct)}>{formatSek(selectedPortfolioHolding.gain_abs)} ({formatPercent(selectedPortfolioHolding.gain_pct)})</span></span>
                   {selectedPortfolioHolding.chart_source === "proxy" ? <span>Graf: <span className="text-strong font-semibold">proxy</span></span> : null}
                 </div>

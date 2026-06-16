@@ -193,6 +193,26 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
           { t: "2026-02-06T10:00:00Z", v: 145 },
           { t: "2026-02-07T10:00:00Z", v: 150 },
         ],
+        owners: [
+          {
+            owner_id: "jp",
+            owner_label: "JP",
+            current_value: 1000.5,
+            acquisition_value: 800,
+            gain_abs: 200.5,
+            gain_pct: 25.06,
+            quantity: 6,
+          },
+          {
+            owner_id: "pat",
+            owner_label: "Pat",
+            current_value: 500,
+            acquisition_value: 200,
+            gain_abs: 300,
+            gain_pct: 150,
+            quantity: 4,
+          },
+        ],
       },
       {
         id: "se0000000002",
@@ -221,6 +241,17 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
         timestamp_local: null,
         is_stale: true,
         sparkline: [],
+        owners: [
+          {
+            owner_id: "jp",
+            owner_label: "JP",
+            current_value: 250,
+            acquisition_value: 200,
+            gain_abs: 50,
+            gain_pct: 25,
+            quantity: 2.5,
+          },
+        ],
       },
     ],
     totals: {
@@ -256,7 +287,17 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
   expect(screen.getByTestId("portfolio-card-se0000000002")).toBeInTheDocument();
   expect(screen.getByTestId("selected-portfolio-chart-panel")).toBeInTheDocument();
   expect(screen.getByText("Nuvarande värde:")).toBeInTheDocument();
-  expect(screen.getByText("Inköpsvärde:")).toBeInTheDocument();
+  expect(screen.getByText("1 001 kr, 500 kr")).toBeInTheDocument();
+  expect(screen.getByText("800 kr (+25.06%), 200 kr (+150.00%)")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Bildspel" }));
+  const overlay = screen.getByTestId("slideshow-overlay");
+  fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
+  fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
+  expect(within(overlay).getByRole("heading", { name: "Exempelbolag B" })).toBeInTheDocument();
+  expect(within(overlay).getByText("1 001 kr, 500 kr")).toBeInTheDocument();
+  expect(within(overlay).getByText("Inköpsvärde 1 000 kr (+50.05%)")).toBeInTheDocument();
+  expect(within(overlay).getByText("800 kr (+25.06%), 200 kr (+150.00%)")).toBeInTheDocument();
 });
 
 test("sorts Mag7 table with sort controls", () => {

@@ -12,11 +12,10 @@ from app.services.portfolio_data import (
     build_portfolio_totals,
     enrich_holdings_with_market_data,
     fetch_portfolio_series,
-    load_portfolio_holdings,
-    portfolio_data_dir,
+    latest_portfolio_source_files,
+    load_combined_portfolio_holdings,
+    portfolio_base_data_dir,
     portfolio_meta,
-    save_portfolio_snapshot,
-    _latest_position_file,
 )
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
@@ -25,12 +24,11 @@ router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 @router.get("/status")
 def portfolio_status():
     enabled = local_portfolio_enabled()
-    data_dir = portfolio_data_dir()
-    source_file = _latest_position_file(data_dir) if enabled and data_dir.exists() else None
+    source_files = latest_portfolio_source_files() if enabled else []
     return {
-        "enabled": enabled and source_file is not None,
+        "enabled": enabled and bool(source_files),
         "configured": enabled,
-        "has_data": source_file is not None,
+        "has_data": bool(source_files),
     }
 
 
@@ -42,12 +40,13 @@ def _require_enabled() -> None:
 @router.get("/summary", response_model=PortfolioSummaryResponse)
 def portfolio_summary():
     _require_enabled()
-    data_dir = portfolio_data_dir()
-    source_file = _latest_position_file(data_dir)
-    if source_file is None:
+    data_dir = portfolio_base_data_dir()
+    source_files = latest_portfolio_source_files(data_dir)
+    if not source_files:
         raise HTTPException(status_code=404, detail="No local Avanza position export found.")
 
-    cache_key = f"portfolio_summary:{source_file}:{source_file.stat().st_mtime_ns}"
+    cache_parts = [f"{owner_id}:{source_file}:{source_file.stat().st_mtime_ns}" for owner_id, _, _, source_file in source_files]
+    cache_key = f"portfolio_summary:{'|'.join(cache_parts)}"
     cached = cache.get(cache_key)
     if cached is not None:
         cached_payload = cached.value
@@ -63,8 +62,7 @@ def portfolio_summary():
         )
 
     fetched_at = datetime.now(timezone.utc)
-    base_holdings = load_portfolio_holdings(data_dir)
-    save_portfolio_snapshot(data_dir, source_file, base_holdings)
+    base_holdings = load_combined_portfolio_holdings(data_dir, save_snapshots=True)
     holdings = enrich_holdings_with_market_data(base_holdings)
     totals = build_portfolio_totals(holdings)
     payload = PortfolioSummaryResponse(
@@ -72,7 +70,12 @@ def portfolio_summary():
         holdings=holdings,
         totals=totals,
         meta={
-            **portfolio_meta(cached=False, fetched_at=to_stockholm_timestamp(fetched_at), data_dir=data_dir, source_file=source_file),
+            **portfolio_meta(
+                cached=False,
+                fetched_at=to_stockholm_timestamp(fetched_at),
+                data_dir=data_dir,
+                source_files=[(owner_id, source_file) for owner_id, _, _, source_file in source_files],
+            ),
             "age_seconds": age_seconds_since(fetched_at),
         },
     )
@@ -83,7 +86,7 @@ def portfolio_summary():
 @router.get("/series")
 def portfolio_series(id: str, range: str = Query(default="1m", pattern="^(1m|3m|6m|1y)$")):
     _require_enabled()
-    holdings = load_portfolio_holdings()
+    holdings = load_combined_portfolio_holdings()
     holding = next((item for item in holdings if item.id == id), None)
     if holding is None:
         raise HTTPException(status_code=404, detail=f"Unknown portfolio holding id: {id}")

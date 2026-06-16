@@ -12,7 +12,7 @@ from typing import Any, TypedDict
 import yaml
 
 from app.core.config import InstrumentConfig, repo_root
-from app.models.portfolio import PortfolioHolding, PortfolioTotals
+from app.models.portfolio import PortfolioHolding, PortfolioOwnerValue, PortfolioTotals
 from app.models.summary import SparkPoint
 from app.providers import yahoo_finance
 from app.services.market_data import calculate_metrics
@@ -25,6 +25,10 @@ class TickerMapping(TypedDict):
 
 
 BUILT_IN_TICKER_MAPPINGS: dict[str, TickerMapping] = {}
+PORTFOLIO_OWNERS = (
+    {"owner_id": "jp", "owner_label": "JP", "dirname": "JP_avanza"},
+    {"owner_id": "pat", "owner_label": "Pat", "dirname": "Pat_avanza"},
+)
 
 
 def portfolio_data_dir() -> Path:
@@ -32,6 +36,38 @@ def portfolio_data_dir() -> Path:
     if raw:
         return Path(raw).expanduser()
     return repo_root() / "local-data" / "avanza"
+
+
+def portfolio_base_data_dir() -> Path:
+    raw = os.getenv("LOCAL_PORTFOLIO_BASE_DIR")
+    if raw:
+        return Path(raw).expanduser()
+    legacy_dir = os.getenv("LOCAL_PORTFOLIO_DATA_DIR")
+    if legacy_dir:
+        return Path(legacy_dir).expanduser().parent
+    return repo_root() / "local-data"
+
+
+def portfolio_owner_dirs(base_dir: Path | None = None) -> list[dict[str, Any]]:
+    root = base_dir or portfolio_base_data_dir()
+    return [
+        {
+            "owner_id": owner["owner_id"],
+            "owner_label": owner["owner_label"],
+            "data_dir": root / owner["dirname"],
+        }
+        for owner in PORTFOLIO_OWNERS
+    ]
+
+
+def latest_portfolio_source_files(base_dir: Path | None = None) -> list[tuple[str, str, Path, Path]]:
+    files: list[tuple[str, str, Path, Path]] = []
+    for owner in portfolio_owner_dirs(base_dir):
+        data_dir = owner["data_dir"]
+        source_file = _latest_position_file(data_dir) if data_dir.exists() else None
+        if source_file is not None:
+            files.append((owner["owner_id"], owner["owner_label"], data_dir, source_file))
+    return files
 
 
 def _parse_decimal(value: str | None) -> float | None:
@@ -68,6 +104,25 @@ def _stable_id(row: dict[str, str]) -> str:
     name = (row.get("Namn") or row.get("Kortnamn") or "holding").strip()
     digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:8]
     return f"{_slug(name)}-{digest}"
+
+
+def _normalized_name(value: str) -> str:
+    return " ".join(value.strip().lower().split())
+
+
+def _holding_match_key(holding: PortfolioHolding) -> str:
+    if holding.isin:
+        return f"isin:{holding.isin.lower()}"
+    if holding.ticker:
+        return f"ticker:{holding.ticker.lower()}"
+    return f"name:{_normalized_name(holding.name)}"
+
+
+def _holding_id_from_key(key: str, fallback: str) -> str:
+    prefix, _, value = key.partition(":")
+    if prefix in {"isin", "ticker"} and value:
+        return _slug(value)
+    return fallback
 
 
 def _latest_position_file(data_dir: Path) -> Path | None:
@@ -256,6 +311,73 @@ def save_portfolio_snapshot(data_dir: Path, source_file: Path, holdings: list[Po
     return snapshots_path
 
 
+def _owner_value(owner_id: str, owner_label: str, holding: PortfolioHolding) -> PortfolioOwnerValue:
+    return PortfolioOwnerValue(
+        owner_id=owner_id,
+        owner_label=owner_label,
+        current_value=holding.current_value,
+        acquisition_value=holding.acquisition_value,
+        gain_abs=holding.gain_abs,
+        gain_pct=holding.gain_pct,
+        quantity=holding.quantity,
+    )
+
+
+def _merge_portfolio_holdings(owner_holdings: list[tuple[str, str, PortfolioHolding]]) -> list[PortfolioHolding]:
+    grouped: dict[str, list[tuple[str, str, PortfolioHolding]]] = {}
+    first_key_by_id: dict[str, str] = {}
+    for owner_id, owner_label, holding in owner_holdings:
+        key = _holding_match_key(holding)
+        grouped.setdefault(key, []).append((owner_id, owner_label, holding))
+        first_key_by_id.setdefault(key, holding.id)
+
+    merged: list[PortfolioHolding] = []
+    for key, items in grouped.items():
+        template = items[0][2]
+        chart_template = next((item for _, _, item in items if item.ticker), template)
+        quantity = round(sum(item.quantity for _, _, item in items), 6)
+        current_value = round(sum(item.current_value for _, _, item in items), 2)
+        acquisition_values = [item.acquisition_value for _, _, item in items if item.acquisition_value is not None]
+        acquisition_value = round(sum(acquisition_values), 2) if acquisition_values else None
+        gain_abs = round(current_value - acquisition_value, 2) if acquisition_value is not None else None
+        gain_pct = _round(gain_abs / acquisition_value * 100.0) if gain_abs is not None and acquisition_value not in (None, 0) else None
+        acquisition_price = _round(acquisition_value / quantity) if acquisition_value is not None and quantity else None
+        owners = [_owner_value(owner_id, owner_label, holding) for owner_id, owner_label, holding in items]
+
+        merged.append(
+            chart_template.model_copy(
+                update={
+                    "id": _holding_id_from_key(key, first_key_by_id[key]),
+                    "name": template.name,
+                    "short_name": template.short_name,
+                    "isin": template.isin,
+                    "instrument_type": template.instrument_type,
+                    "market": template.market,
+                    "currency": template.currency,
+                    "quantity": quantity,
+                    "current_value": current_value,
+                    "acquisition_price_sek": acquisition_price,
+                    "acquisition_value": acquisition_value,
+                    "gain_abs": gain_abs,
+                    "gain_pct": gain_pct,
+                    "owners": owners,
+                }
+            )
+        )
+
+    return sorted(merged, key=lambda item: item.current_value, reverse=True)
+
+
+def load_combined_portfolio_holdings(base_dir: Path | None = None, *, save_snapshots: bool = False) -> list[PortfolioHolding]:
+    owner_holdings: list[tuple[str, str, PortfolioHolding]] = []
+    for owner_id, owner_label, data_dir, source_file in latest_portfolio_source_files(base_dir):
+        holdings = load_portfolio_holdings(data_dir)
+        if save_snapshots:
+            save_portfolio_snapshot(data_dir, source_file, holdings)
+        owner_holdings.extend((owner_id, owner_label, holding) for holding in holdings)
+    return _merge_portfolio_holdings(owner_holdings)
+
+
 def build_portfolio_totals(holdings: list[PortfolioHolding]) -> PortfolioTotals:
     current_value = sum(item.current_value for item in holdings)
     acquisition_value = sum(item.acquisition_value or 0.0 for item in holdings)
@@ -314,11 +436,19 @@ def fetch_portfolio_series(holding: PortfolioHolding, range_key: str) -> list[Sp
     return [SparkPoint(t=point.t, v=round(point.close, 2)) for point in points]
 
 
-def portfolio_meta(*, cached: bool, fetched_at: datetime, data_dir: Path, source_file: Path | None) -> dict[str, Any]:
+def portfolio_meta(
+    *,
+    cached: bool,
+    fetched_at: datetime,
+    data_dir: Path,
+    source_file: Path | None = None,
+    source_files: list[tuple[str, Path]] | None = None,
+) -> dict[str, Any]:
     return {
         "source": "local_avanza_export",
         "cached": cached,
         "fetched_at": fetched_at,
         "data_dir": str(data_dir),
         "source_file": source_file.name if source_file else None,
+        "source_files": [{"owner_id": owner_id, "source_file": path.name} for owner_id, path in (source_files or [])],
     }

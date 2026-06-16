@@ -48,6 +48,16 @@ export type PortfolioStatus = {
   has_data: boolean;
 };
 
+export type PortfolioOwnerValue = {
+  owner_id: "jp" | "pat" | string;
+  owner_label: string;
+  current_value: number;
+  acquisition_value: number | null;
+  gain_abs: number | null;
+  gain_pct: number | null;
+  quantity: number;
+};
+
 export type PortfolioHolding = {
   id: string;
   name: string;
@@ -75,6 +85,7 @@ export type PortfolioHolding = {
   timestamp_local: string | null;
   is_stale: boolean;
   sparkline: SparkPoint[];
+  owners: PortfolioOwnerValue[];
 };
 
 export type PortfolioSummaryResponse = {

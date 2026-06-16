@@ -8,6 +8,16 @@ from pydantic import BaseModel, Field
 from app.models.summary import SparkPoint
 
 
+class PortfolioOwnerValue(BaseModel):
+    owner_id: str
+    owner_label: str
+    current_value: float
+    acquisition_value: Optional[float] = None
+    gain_abs: Optional[float] = None
+    gain_pct: Optional[float] = None
+    quantity: float
+
+
 class PortfolioHolding(BaseModel):
     id: str
     name: str
@@ -35,6 +45,7 @@ class PortfolioHolding(BaseModel):
     timestamp_local: Optional[datetime] = None
     is_stale: bool = True
     sparkline: list[SparkPoint] = Field(default_factory=list)
+    owners: list[PortfolioOwnerValue] = Field(default_factory=list)
 
 
 class PortfolioTotals(BaseModel):

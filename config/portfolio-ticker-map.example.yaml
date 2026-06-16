@@ -1,4 +1,4 @@
-# Copy this file to local-data/avanza/ticker-map.yaml and edit it locally.
+# Copy this file to local-data/JP_avanza/ticker-map.yaml or local-data/Pat_avanza/ticker-map.yaml and edit it locally.
 # Keep the local file out of Git. Do not put Avanza login details or secrets here.
 mappings:
   - isin: EXAMPLE0000001
