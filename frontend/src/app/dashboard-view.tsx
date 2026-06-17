@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { MarketRange, PortfolioHolding, PortfolioSummaryResponse, SparkPoint, SummaryItem, SummaryResponse } from "@/lib/api";
+import type { MarketRange, PortfolioAccountValue, PortfolioHolding, PortfolioSummaryResponse, SparkPoint, SummaryItem, SummaryResponse } from "@/lib/api";
 
 const tabs = [
   { id: "commodities", label: "Råvaror" },
@@ -30,12 +30,30 @@ type DashboardViewProps = {
 
 type ModuleStatus = "fresh" | "partial" | "stale" | "offline";
 type Theme = "light" | "dark";
+type PortfolioOwnerSummary = {
+  owner_id: string;
+  owner_label: string;
+  current_value: number;
+  acquisition_value: number;
+  gain_abs: number;
+  gain_pct: number | null;
+  bank_value: number;
+  total_with_bank: number;
+  holding_count: number;
+};
 type SlideshowSlide =
   | {
       id: string;
       type: "market";
       group: "Råvaror" | "Mag 7" | "Index";
       item: SummaryItem;
+    }
+  | {
+      id: string;
+      type: "portfolio-summary";
+      group: "Min Avanza";
+      totals: PortfolioSummaryResponse["totals"];
+      owners: PortfolioOwnerSummary[];
     }
   | {
       id: string;
@@ -170,6 +188,59 @@ function formatOwnerAcquisitionValues(holding: PortfolioHolding): string {
   return holding.owners
     .map((owner) => `${formatSek(owner.acquisition_value)} (${formatPercent(owner.gain_pct)})`)
     .join(", ");
+}
+
+function buildPortfolioOwnerSummaries(items: PortfolioHolding[], accounts: PortfolioAccountValue[]): PortfolioOwnerSummary[] {
+  const summaries = new Map<string, PortfolioOwnerSummary>();
+  for (const holding of items) {
+    for (const owner of holding.owners) {
+      const current = summaries.get(owner.owner_id) ?? {
+        owner_id: owner.owner_id,
+        owner_label: owner.owner_label,
+        current_value: 0,
+        acquisition_value: 0,
+        gain_abs: 0,
+        gain_pct: null,
+        bank_value: 0,
+        total_with_bank: 0,
+        holding_count: 0,
+      };
+      current.current_value += owner.current_value;
+      current.acquisition_value += owner.acquisition_value ?? 0;
+      current.gain_abs += owner.gain_abs ?? 0;
+      current.holding_count += 1;
+      summaries.set(owner.owner_id, current);
+    }
+  }
+
+  for (const account of accounts) {
+    const current = summaries.get(account.owner_id) ?? {
+      owner_id: account.owner_id,
+      owner_label: account.owner_label,
+      current_value: 0,
+      acquisition_value: 0,
+      gain_abs: 0,
+      gain_pct: null,
+      bank_value: 0,
+      total_with_bank: 0,
+      holding_count: 0,
+    };
+    current.bank_value = account.bank_value;
+    summaries.set(account.owner_id, current);
+  }
+
+  const ownerOrder: Record<string, number> = { jp: 0, pat: 1 };
+  return [...summaries.values()]
+    .map((owner) => ({
+      ...owner,
+      current_value: Math.round(owner.current_value),
+      acquisition_value: Math.round(owner.acquisition_value),
+      gain_abs: Math.round(owner.gain_abs),
+      bank_value: Math.round(owner.bank_value),
+      total_with_bank: Math.round(owner.current_value + owner.bank_value),
+      gain_pct: owner.acquisition_value ? (owner.gain_abs / owner.acquisition_value) * 100 : null,
+    }))
+    .sort((a, b) => (ownerOrder[a.owner_id] ?? 99) - (ownerOrder[b.owner_id] ?? 99));
 }
 
 function changeToneClass(value: number | null): string {
@@ -513,6 +584,47 @@ function SlideshowOverlay({
                 </div>
                 <Sparkline points={activeSlide.item.sparkline} heightClass="h-[55vh]" showXAxis />
               </>
+            ) : activeSlide.type === "portfolio-summary" ? (
+              <>
+                <div className="slideshow-heading">
+                  <div>
+                    <h3 className="section-title text-5xl">Min Avanza</h3>
+                    <p className="text-muted mt-2 text-sm">
+                      {activeSlide.group} • JP och Pat • {activeSlide.totals.holding_count} innehav • {activeSlide.totals.chart_count} grafer
+                    </p>
+                  </div>
+                  <div className="slideshow-value-block">
+                    <div className="kpi-subtle">Totalt nuvarande värde</div>
+                    <div className="slideshow-value">{formatSek(activeSlide.totals.current_value)}</div>
+                    <div className={`text-lg font-semibold ${changeToneClass(activeSlide.totals.gain_pct)}`}>
+                      Inköpsvärde {formatSek(activeSlide.totals.acquisition_value)} ({formatPercent(activeSlide.totals.gain_pct)})
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-10 grid gap-4 md:grid-cols-2">
+                  {activeSlide.owners.map((owner) => (
+                    <div key={owner.owner_id} className="card-surface p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <h4 className="text-2xl font-semibold">{owner.owner_label}</h4>
+                        <span className="badge">{owner.holding_count} innehav</span>
+                      </div>
+                      <div className="mt-5 text-4xl font-semibold">{formatSek(owner.current_value)}</div>
+                      <div className={`mt-3 text-lg font-semibold ${changeToneClass(owner.gain_pct)}`}>
+                        Inköpsvärde {formatSek(owner.acquisition_value)} ({formatPercent(owner.gain_pct)})
+                      </div>
+                      <div className="text-muted mt-3 text-base font-semibold">
+                        Bankkonto {formatSek(owner.bank_value)}
+                      </div>
+                      <div className="text-muted mt-1 text-sm font-semibold">
+                        Totalt inkl. bankkonto {formatSek(owner.total_with_bank)}
+                      </div>
+                      <div className={`mt-2 text-sm font-semibold ${changeToneClass(owner.gain_pct)}`}>
+                        Resultat {formatSek(owner.gain_abs)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             ) : activeSlide.type === "portfolio" ? (
               <>
                 <div className="slideshow-heading">
@@ -726,6 +838,8 @@ export function DashboardView({
   const tableGridClass = showMag7Table ? "grid-cols-7" : "grid-cols-8";
   const selectedMarketChart = kpiItems.find((item) => item.id === selectedMarketChartId) ?? kpiItems[0] ?? null;
   const selectedPortfolioHolding = filteredPortfolioItems.find((item) => item.id === selectedMarketChartId) ?? filteredPortfolioItems[0] ?? null;
+  const portfolioAccounts = portfolio?.accounts ?? [];
+  const portfolioOwnerSummaries = useMemo(() => buildPortfolioOwnerSummaries(filteredPortfolioItems, portfolioAccounts), [filteredPortfolioItems, portfolioAccounts]);
   const slideshowSlides: SlideshowSlide[] = useMemo(
     () => [
       ...filteredCommodityItems.map((item) => ({
@@ -746,6 +860,17 @@ export function DashboardView({
         group: "Index" as const,
         item,
       })),
+      ...(portfolio && filteredPortfolioItems.length > 0
+        ? [
+            {
+              id: "portfolio-summary",
+              type: "portfolio-summary" as const,
+              group: "Min Avanza" as const,
+              totals: portfolio.totals,
+              owners: portfolioOwnerSummaries,
+            },
+          ]
+        : []),
       ...filteredPortfolioItems
         .filter((holding) => holding.has_chart && holding.sparkline.length >= 2)
         .map((holding) => ({
@@ -769,7 +894,7 @@ export function DashboardView({
           ]
         : []),
     ],
-    [filteredCommodityItems, filteredIndexItems, filteredMag7Items, filteredPortfolioItems, swedenInflationItem, swedenInflationPoints, usaInflationItem, usaInflationPoints],
+    [filteredCommodityItems, filteredIndexItems, filteredMag7Items, filteredPortfolioItems, portfolio, portfolioOwnerSummaries, swedenInflationItem, swedenInflationPoints, usaInflationItem, usaInflationPoints],
   );
   const safeSlideshowIndex = slideshowSlides.length > 0 ? Math.min(slideshowIndex, slideshowSlides.length - 1) : 0;
   const activeSlideshowSlide = slideshowSlides[safeSlideshowIndex] ?? null;

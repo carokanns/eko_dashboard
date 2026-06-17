@@ -5,7 +5,18 @@ from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 
 from app.models.summary import SparkPoint
-from app.services.portfolio_data import build_portfolio_totals, load_combined_portfolio_holdings, load_portfolio_holdings, save_portfolio_snapshot
+from app.services.portfolio_data import (
+    build_portfolio_totals,
+    check_portfolio_transactions_for_updates,
+    latest_portfolio_refresh_files,
+    load_combined_portfolio_holdings,
+    load_portfolio_accounts_from_ledger,
+    load_portfolio_accounts,
+    load_portfolio_holdings_from_ledger,
+    load_portfolio_holdings,
+    save_portfolio_snapshot,
+    update_portfolio_ledger_from_transactions,
+)
 
 
 def _write_positions(tmp_path, dirname="avanza"):
@@ -41,6 +52,27 @@ def _write_single_position(
         encoding="utf-8",
     )
     return data_dir
+
+
+def _write_account_summary(data_dir, *, bank_value="1234,00", isk_value="10000,00"):
+    (data_dir / "2026-06-11_konto.csv").write_text(
+        "\ufeffKontonummer;Kontotyp;Totalvärde;Lånebelopp\n"
+        f"1111-1111111;Investeringssparkonto;{isk_value}\n"
+        f"2222-2222222;Sparkonto;{bank_value}\n",
+        encoding="utf-8",
+    )
+
+
+def _write_transactions(data_dir, *, rows: list[str] | None = None):
+    transaction_rows = rows or [
+        "2026-06-02;Bas ISK;Autogiroinsättning;Autogiroinsättning;;;1000;SEK;;;;;",
+    ]
+    (data_dir / "transaktioner_2026-01-01_2026-06-17.csv").write_text(
+        "\ufeffDatum;Konto;Typ av transaktion;Värdepapper/beskrivning;Antal;Kurs;Belopp;Transaktionsvaluta;Courtage;Valutakurs;Instrumentvaluta;ISIN;Resultat\n"
+        + "\n".join(transaction_rows)
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def test_portfolio_endpoint_is_disabled_without_flag(client: TestClient, monkeypatch):
@@ -172,8 +204,127 @@ def test_combined_portfolio_writes_snapshots_per_owner(tmp_path):
     assert ";900.0;" in pat_rows[1]
 
 
+def test_portfolio_accounts_read_bank_account_per_owner(tmp_path):
+    jp_dir = _write_single_position(tmp_path, "JP_avanza")
+    pat_dir = _write_single_position(tmp_path, "Pat_avanza")
+    _write_account_summary(jp_dir, bank_value="1234,50", isk_value="10000,00")
+    _write_account_summary(pat_dir, bank_value="2500,00", isk_value="20000,00")
+
+    accounts = load_portfolio_accounts(tmp_path)
+
+    assert [account.owner_id for account in accounts] == ["jp", "pat"]
+    assert accounts[0].bank_value == 1234.5
+    assert accounts[0].total_value == 11234.5
+    assert accounts[1].bank_value == 2500
+    assert accounts[1].total_value == 22500
+
+
+def test_transaction_files_are_refresh_signal_when_present(tmp_path):
+    jp_dir = _write_single_position(tmp_path, "JP_avanza")
+    pat_dir = _write_single_position(tmp_path, "Pat_avanza")
+    _write_account_summary(jp_dir)
+    _write_account_summary(pat_dir)
+    _write_transactions(pat_dir)
+
+    refresh_files = latest_portfolio_refresh_files(tmp_path)
+
+    assert [(owner_id, kind, source_file.name) for owner_id, _owner_label, _data_dir, kind, source_file in refresh_files] == [
+        ("pat", "transactions", "transaktioner_2026-01-01_2026-06-17.csv")
+    ]
+
+
+def test_startup_transaction_check_tracks_new_rows(tmp_path):
+    pat_dir = _write_single_position(tmp_path, "Pat_avanza")
+    _write_transactions(pat_dir)
+
+    first = check_portfolio_transactions_for_updates(tmp_path)
+    second = check_portfolio_transactions_for_updates(tmp_path)
+    _write_transactions(
+        pat_dir,
+        rows=[
+            "2026-06-02;Bas ISK;Autogiroinsättning;Autogiroinsättning;;;1000;SEK;;;;;",
+            "2026-06-03;Bas ISK;Köp;Exempel;1;100;-100;SEK;;;;SE0000000001;",
+        ],
+    )
+    third = check_portfolio_transactions_for_updates(tmp_path)
+
+    assert first["has_updates"] is True
+    assert first["owners"][0]["new_rows"] == 1
+    assert second["has_updates"] is False
+    assert second["owners"][0]["new_rows"] == 0
+    assert third["has_updates"] is True
+    assert third["owners"][0]["new_rows"] == 1
+
+
+def test_ledger_seed_baselines_existing_transactions(tmp_path):
+    data_dir = _write_single_position(tmp_path, "JP_avanza", quantity="10", current_value="1500,00", acquisition_price="100,00")
+    _write_account_summary(data_dir, bank_value="1234,00", isk_value="10000,00")
+    _write_transactions(
+        data_dir,
+        rows=[
+            "2026-06-02;Bank;Autogiroinsättning;Autogiroinsättning;;;1000;SEK;;;;;",
+        ],
+    )
+
+    first_update = update_portfolio_ledger_from_transactions(tmp_path)
+    holdings = load_portfolio_holdings_from_ledger(tmp_path)
+    accounts = load_portfolio_accounts_from_ledger(tmp_path)
+
+    assert first_update["applied_count"] == 0
+    assert holdings[0].quantity == 10
+    assert holdings[0].acquisition_value == 1000
+    assert accounts[0].bank_value == 1234
+
+
+def test_ledger_applies_new_buy_transaction_after_seed(tmp_path):
+    data_dir = _write_single_position(tmp_path, "JP_avanza", quantity="10", current_value="1500,00", acquisition_price="100,00")
+    _write_account_summary(data_dir, bank_value="1234,00", isk_value="10000,00")
+    _write_transactions(
+        data_dir,
+        rows=[
+            "2026-06-02;Bas ISK;Autogiroinsättning;Autogiroinsättning;;;1000;SEK;;;;;",
+        ],
+    )
+    update_portfolio_ledger_from_transactions(tmp_path)
+    _write_transactions(
+        data_dir,
+        rows=[
+            "2026-06-02;Bas ISK;Autogiroinsättning;Autogiroinsättning;;;1000;SEK;;;;;",
+            "2026-06-03;Bas ISK;Köp;Exempelbolag B;2;100;-200;SEK;;;SEK;SE0000000001;",
+        ],
+    )
+
+    update = update_portfolio_ledger_from_transactions(tmp_path)
+    holdings = load_portfolio_holdings_from_ledger(tmp_path)
+
+    assert update["applied_count"] == 1
+    assert holdings[0].quantity == 12
+    assert holdings[0].acquisition_value == 1200
+
+
+def test_ledger_applies_new_bank_transaction_after_seed(tmp_path):
+    data_dir = _write_single_position(tmp_path, "JP_avanza")
+    _write_account_summary(data_dir, bank_value="1000,00", isk_value="10000,00")
+    _write_transactions(data_dir, rows=[])
+    update_portfolio_ledger_from_transactions(tmp_path)
+    _write_transactions(
+        data_dir,
+        rows=[
+            "2026-06-03;Bank;Inlåningsränta;Inlåningsränta;;;25;SEK;;;;;",
+        ],
+    )
+
+    update = update_portfolio_ledger_from_transactions(tmp_path)
+    accounts = load_portfolio_accounts_from_ledger(tmp_path)
+
+    assert update["applied_count"] == 1
+    assert accounts[0].bank_value == 1025
+
+
 def test_portfolio_summary_with_flag_and_local_file(client: TestClient, monkeypatch, tmp_path):
-    _write_positions(tmp_path, "JP_avanza")
+    data_dir = _write_positions(tmp_path, "JP_avanza")
+    _write_account_summary(data_dir, bank_value="1234,50", isk_value="1750,50")
+    _write_transactions(data_dir)
     now = datetime.now(timezone.utc)
 
     def fake_enrich(holdings):
@@ -205,11 +356,14 @@ def test_portfolio_summary_with_flag_and_local_file(client: TestClient, monkeypa
     payload = response.json()
     assert payload["enabled"] is True
     assert payload["meta"]["source"] == "local_avanza_export"
-    assert payload["totals"]["current_value"] == 1750.5
+    assert payload["totals"]["current_value"] == 1200
     assert len(payload["holdings"]) == 2
     assert payload["holdings"][0]["has_chart"] is True
     assert payload["holdings"][1]["has_chart"] is False
     assert payload["holdings"][0]["owners"][0]["owner_id"] == "jp"
+    assert payload["accounts"][0]["owner_id"] == "jp"
+    assert payload["accounts"][0]["bank_value"] == 1234.5
+    assert any(item["kind"] == "transactions" for item in payload["meta"]["refresh_files"])
 
 
 def test_portfolio_series_for_unmapped_holding_returns_empty(client: TestClient, monkeypatch, tmp_path):

@@ -13,9 +13,13 @@ from app.services.portfolio_data import (
     enrich_holdings_with_market_data,
     fetch_portfolio_series,
     latest_portfolio_source_files,
-    load_combined_portfolio_holdings,
+    latest_portfolio_refresh_files,
+    load_portfolio_accounts_from_ledger,
+    load_portfolio_holdings_from_ledger,
     portfolio_base_data_dir,
+    portfolio_ledger_path,
     portfolio_meta,
+    update_portfolio_ledger_from_transactions,
 )
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
@@ -24,11 +28,13 @@ router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 @router.get("/status")
 def portfolio_status():
     enabled = local_portfolio_enabled()
-    source_files = latest_portfolio_source_files() if enabled else []
+    data_dir = portfolio_base_data_dir()
+    source_files = latest_portfolio_source_files(data_dir) if enabled else []
+    has_ledger = portfolio_ledger_path(data_dir).exists() if enabled else False
     return {
-        "enabled": enabled and bool(source_files),
+        "enabled": enabled and (bool(source_files) or has_ledger),
         "configured": enabled,
-        "has_data": bool(source_files),
+        "has_data": bool(source_files) or has_ledger,
     }
 
 
@@ -42,10 +48,15 @@ def portfolio_summary():
     _require_enabled()
     data_dir = portfolio_base_data_dir()
     source_files = latest_portfolio_source_files(data_dir)
-    if not source_files:
+    has_ledger = portfolio_ledger_path(data_dir).exists()
+    if not source_files and not has_ledger:
         raise HTTPException(status_code=404, detail="No local Avanza position export found.")
 
-    cache_parts = [f"{owner_id}:{source_file}:{source_file.stat().st_mtime_ns}" for owner_id, _, _, source_file in source_files]
+    ledger_update = update_portfolio_ledger_from_transactions(data_dir)
+    refresh_files = latest_portfolio_refresh_files(data_dir)
+    ledger_path = portfolio_ledger_path(data_dir)
+    cache_parts = [f"ledger:{ledger_path}:{ledger_path.stat().st_mtime_ns}" if ledger_path.exists() else "ledger:missing"]
+    cache_parts.extend(f"{owner_id}:{kind}:{source_file}:{source_file.stat().st_mtime_ns}" for owner_id, _, _, kind, source_file in refresh_files)
     cache_key = f"portfolio_summary:{'|'.join(cache_parts)}"
     cached = cache.get(cache_key)
     if cached is not None:
@@ -62,20 +73,25 @@ def portfolio_summary():
         )
 
     fetched_at = datetime.now(timezone.utc)
-    base_holdings = load_combined_portfolio_holdings(data_dir, save_snapshots=True)
+    base_holdings = load_portfolio_holdings_from_ledger(data_dir)
     holdings = enrich_holdings_with_market_data(base_holdings)
     totals = build_portfolio_totals(holdings)
+    accounts = load_portfolio_accounts_from_ledger(data_dir)
     payload = PortfolioSummaryResponse(
         enabled=True,
         holdings=holdings,
         totals=totals,
+        accounts=accounts,
         meta={
             **portfolio_meta(
                 cached=False,
                 fetched_at=to_stockholm_timestamp(fetched_at),
                 data_dir=data_dir,
                 source_files=[(owner_id, source_file) for owner_id, _, _, source_file in source_files],
+                refresh_files=[(owner_id, kind, source_file) for owner_id, _, _, kind, source_file in refresh_files],
             ),
+            "ledger_file": str(ledger_path),
+            "ledger_applied_transactions": ledger_update["applied_count"],
             "age_seconds": age_seconds_since(fetched_at),
         },
     )
@@ -86,7 +102,7 @@ def portfolio_summary():
 @router.get("/series")
 def portfolio_series(id: str, range: str = Query(default="1m", pattern="^(1m|3m|6m|1y)$")):
     _require_enabled()
-    holdings = load_combined_portfolio_holdings()
+    holdings = load_portfolio_holdings_from_ledger()
     holding = next((item for item in holdings if item.id == id), None)
     if holding is None:
         raise HTTPException(status_code=404, detail=f"Unknown portfolio holding id: {id}")

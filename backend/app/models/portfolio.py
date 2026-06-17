@@ -18,6 +18,15 @@ class PortfolioOwnerValue(BaseModel):
     quantity: float
 
 
+class PortfolioAccountValue(BaseModel):
+    owner_id: str
+    owner_label: str
+    total_value: float
+    bank_value: float
+    account_count: int
+    source_file: Optional[str] = None
+
+
 class PortfolioHolding(BaseModel):
     id: str
     name: str
@@ -61,4 +70,5 @@ class PortfolioSummaryResponse(BaseModel):
     enabled: bool
     holdings: list[PortfolioHolding]
     totals: PortfolioTotals
+    accounts: list[PortfolioAccountValue] = Field(default_factory=list)
     meta: dict[str, object]

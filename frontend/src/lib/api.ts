@@ -58,6 +58,15 @@ export type PortfolioOwnerValue = {
   quantity: number;
 };
 
+export type PortfolioAccountValue = {
+  owner_id: "jp" | "pat" | string;
+  owner_label: string;
+  total_value: number;
+  bank_value: number;
+  account_count: number;
+  source_file: string | null;
+};
+
 export type PortfolioHolding = {
   id: string;
   name: string;
@@ -99,6 +108,7 @@ export type PortfolioSummaryResponse = {
     holding_count: number;
     chart_count: number;
   };
+  accounts: PortfolioAccountValue[];
   meta: ApiMeta & {
     data_dir?: string;
     source_file?: string | null;

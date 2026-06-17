@@ -262,6 +262,24 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
       holding_count: 2,
       chart_count: 1,
     },
+    accounts: [
+      {
+        owner_id: "jp",
+        owner_label: "JP",
+        total_value: 3234.5,
+        bank_value: 1234.5,
+        account_count: 2,
+        source_file: "2026-06-11_konto.csv",
+      },
+      {
+        owner_id: "pat",
+        owner_label: "Pat",
+        total_value: 2500,
+        bank_value: 2000,
+        account_count: 2,
+        source_file: "2026-06-11_konto.csv",
+      },
+    ],
     meta: {
       source: "local_avanza_export",
       cached: false,
@@ -293,6 +311,16 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
   fireEvent.click(screen.getByRole("button", { name: "Bildspel" }));
   const overlay = screen.getByTestId("slideshow-overlay");
   fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
+  fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
+  expect(within(overlay).getByRole("heading", { name: "Min Avanza" })).toBeInTheDocument();
+  expect(within(overlay).getByText("Totalt nuvarande värde")).toBeInTheDocument();
+  expect(within(overlay).getByText("JP")).toBeInTheDocument();
+  expect(within(overlay).getByText("Pat")).toBeInTheDocument();
+  expect(within(overlay).getByText("Inköpsvärde 1 200 kr (+45.88%)")).toBeInTheDocument();
+  expect(within(overlay).getByText("Bankkonto 1 235 kr")).toBeInTheDocument();
+  expect(within(overlay).getByText("Bankkonto 2 000 kr")).toBeInTheDocument();
+  expect(within(overlay).getByText("Totalt inkl. bankkonto 2 485 kr")).toBeInTheDocument();
+  expect(within(overlay).getByText("Totalt inkl. bankkonto 2 500 kr")).toBeInTheDocument();
   fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
   expect(within(overlay).getByRole("heading", { name: "Exempelbolag B" })).toBeInTheDocument();
   expect(within(overlay).getByText("1 001 kr, 500 kr")).toBeInTheDocument();

@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from app.core.cache import cache
 from app.core.provider_monitor import provider_monitor
 from app.core.scheduler import scheduler
-from app.core.settings import app_api_token
+from app.core.settings import app_api_token, local_portfolio_enabled
 from app.core.time import to_stockholm
 from app.db.migrations import upgrade_to_head
 from app.db.session import database_url
@@ -16,11 +16,14 @@ from app.routes.indexes import router as indexes_router
 from app.routes.inflation import router as inflation_router
 from app.routes.mag7 import router as mag7_router
 from app.routes.portfolio import router as portfolio_router
+from app.services.portfolio_data import update_portfolio_ledger_from_transactions
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     upgrade_to_head()
+    if local_portfolio_enabled():
+        update_portfolio_ledger_from_transactions()
     await scheduler.start()
     try:
         yield

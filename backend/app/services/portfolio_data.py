@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import json
 import math
 import os
 import re
@@ -12,7 +13,7 @@ from typing import Any, TypedDict
 import yaml
 
 from app.core.config import InstrumentConfig, repo_root
-from app.models.portfolio import PortfolioHolding, PortfolioOwnerValue, PortfolioTotals
+from app.models.portfolio import PortfolioAccountValue, PortfolioHolding, PortfolioOwnerValue, PortfolioTotals
 from app.models.summary import SparkPoint
 from app.providers import yahoo_finance
 from app.services.market_data import calculate_metrics
@@ -68,6 +69,111 @@ def latest_portfolio_source_files(base_dir: Path | None = None) -> list[tuple[st
         if source_file is not None:
             files.append((owner["owner_id"], owner["owner_label"], data_dir, source_file))
     return files
+
+
+def _latest_named_file(data_dir: Path, patterns: tuple[str, ...]) -> Path | None:
+    candidates: list[Path] = []
+    for pattern in patterns:
+        candidates.extend(data_dir.glob(pattern))
+    unique_candidates = sorted(
+        set(candidates),
+        key=lambda path: (_snapshot_date(path), path.stat().st_mtime, path.name),
+        reverse=True,
+    )
+    return unique_candidates[0] if unique_candidates else None
+
+
+def _latest_account_file(data_dir: Path) -> Path | None:
+    return _latest_named_file(data_dir, ("*konto*.csv",))
+
+
+def _latest_transaction_file(data_dir: Path) -> Path | None:
+    return _latest_named_file(data_dir, ("*transaktion*.csv", "*transaction*.csv"))
+
+
+def latest_portfolio_refresh_files(base_dir: Path | None = None) -> list[tuple[str, str, Path, str, Path]]:
+    transaction_files = latest_portfolio_transaction_files(base_dir)
+    if transaction_files:
+        return [(owner_id, owner_label, data_dir, "transactions", source_file) for owner_id, owner_label, data_dir, source_file in transaction_files]
+    return [(owner_id, owner_label, data_dir, "positions", source_file) for owner_id, owner_label, data_dir, source_file in latest_portfolio_source_files(base_dir)]
+
+
+def latest_portfolio_transaction_files(base_dir: Path | None = None) -> list[tuple[str, str, Path, Path]]:
+    files: list[tuple[str, str, Path, Path]] = []
+    for owner in portfolio_owner_dirs(base_dir):
+        data_dir = owner["data_dir"]
+        if not data_dir.exists():
+            continue
+        source_file = _latest_transaction_file(data_dir)
+        if source_file is not None:
+            files.append((owner["owner_id"], owner["owner_label"], data_dir, source_file))
+    return files
+
+
+def _transaction_state_path(base_dir: Path) -> Path:
+    return base_dir / ".portfolio-transaction-state.json"
+
+
+def portfolio_ledger_path(base_dir: Path | None = None) -> Path:
+    return (base_dir or portfolio_base_data_dir()) / "portfolio-ledger.json"
+
+
+def _transaction_file_signature(source_file: Path) -> dict[str, Any]:
+    digest = hashlib.sha256()
+    row_count = 0
+    with source_file.open(encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter=";")
+        for row in reader:
+            row_count += 1
+            digest.update(json.dumps(row, ensure_ascii=False, sort_keys=True).encode("utf-8"))
+            digest.update(b"\n")
+    return {
+        "source_file": source_file.name,
+        "mtime_ns": source_file.stat().st_mtime_ns,
+        "row_count": row_count,
+        "sha256": digest.hexdigest(),
+    }
+
+
+def check_portfolio_transactions_for_updates(base_dir: Path | None = None) -> dict[str, Any]:
+    root = base_dir or portfolio_base_data_dir()
+    root.mkdir(parents=True, exist_ok=True)
+    state_path = _transaction_state_path(root)
+    previous = {}
+    if state_path.exists():
+        try:
+            previous = json.loads(state_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            previous = {}
+
+    owners: list[dict[str, Any]] = []
+    has_updates = False
+    for owner_id, owner_label, _data_dir, source_file in latest_portfolio_transaction_files(root):
+        signature = _transaction_file_signature(source_file)
+        previous_owner = previous.get("owners", {}).get(owner_id, {})
+        changed = signature.get("sha256") != previous_owner.get("sha256")
+        new_rows = max(0, int(signature["row_count"]) - int(previous_owner.get("row_count", 0))) if previous_owner else int(signature["row_count"])
+        has_updates = has_updates or changed
+        owners.append(
+            {
+                "owner_id": owner_id,
+                "owner_label": owner_label,
+                "source_file": signature["source_file"],
+                "row_count": signature["row_count"],
+                "changed": changed,
+                "new_rows": new_rows if changed else 0,
+            }
+        )
+
+    current_state = {
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "owners": {
+            owner_id: _transaction_file_signature(source_file)
+            for owner_id, _owner_label, _data_dir, source_file in latest_portfolio_transaction_files(root)
+        },
+    }
+    state_path.write_text(json.dumps(current_state, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    return {"has_updates": has_updates, "owners": owners, "state_file": str(state_path)}
 
 
 def _parse_decimal(value: str | None) -> float | None:
@@ -202,6 +308,12 @@ def _round(value: float | None, precision: int = 2) -> float | None:
     return round(value, precision)
 
 
+def _transaction_row_hash(row: dict[str, str]) -> str:
+    normalized = {key.strip(): (value or "").strip() for key, value in row.items()}
+    payload = json.dumps(normalized, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def load_portfolio_holdings(data_dir: Path | None = None) -> list[PortfolioHolding]:
     base_dir = data_dir or portfolio_data_dir()
     position_file = _latest_position_file(base_dir)
@@ -249,6 +361,40 @@ def load_portfolio_holdings(data_dir: Path | None = None) -> list[PortfolioHoldi
             )
 
     return sorted(holdings, key=lambda item: item.current_value, reverse=True)
+
+
+def load_portfolio_account_value(data_dir: Path, owner_id: str, owner_label: str) -> PortfolioAccountValue:
+    account_file = _latest_account_file(data_dir)
+    if account_file is None:
+        return PortfolioAccountValue(
+            owner_id=owner_id,
+            owner_label=owner_label,
+            total_value=0.0,
+            bank_value=0.0,
+            account_count=0,
+            source_file=None,
+        )
+
+    total_value = 0.0
+    bank_value = 0.0
+    account_count = 0
+    with account_file.open(encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter=";")
+        for row in reader:
+            value = _parse_decimal(row.get("Totalvärde")) or 0.0
+            total_value += value
+            account_count += 1
+            if (row.get("Kontotyp") or "").strip().lower() == "sparkonto":
+                bank_value += value
+
+    return PortfolioAccountValue(
+        owner_id=owner_id,
+        owner_label=owner_label,
+        total_value=round(total_value, 2),
+        bank_value=round(bank_value, 2),
+        account_count=account_count,
+        source_file=account_file.name,
+    )
 
 
 def save_portfolio_snapshot(data_dir: Path, source_file: Path, holdings: list[PortfolioHolding]) -> Path:
@@ -378,6 +524,283 @@ def load_combined_portfolio_holdings(base_dir: Path | None = None, *, save_snaps
     return _merge_portfolio_holdings(owner_holdings)
 
 
+def load_portfolio_accounts(base_dir: Path | None = None) -> list[PortfolioAccountValue]:
+    accounts: list[PortfolioAccountValue] = []
+    for owner in portfolio_owner_dirs(base_dir):
+        data_dir = owner["data_dir"]
+        if data_dir.exists():
+            accounts.append(load_portfolio_account_value(data_dir, owner["owner_id"], owner["owner_label"]))
+    return accounts
+
+
+def _empty_ledger_owner(owner_id: str, owner_label: str) -> dict[str, Any]:
+    return {
+        "owner_id": owner_id,
+        "owner_label": owner_label,
+        "bank_value": 0.0,
+        "holdings": {},
+        "processed_transactions": {},
+    }
+
+
+def _ledger_key_for_holding(holding: PortfolioHolding) -> str:
+    if holding.isin:
+        return f"isin:{holding.isin.lower()}"
+    if holding.ticker:
+        return f"ticker:{holding.ticker.lower()}"
+    return f"name:{_normalized_name(holding.name)}"
+
+
+def _holding_to_ledger_item(holding: PortfolioHolding) -> dict[str, Any]:
+    return {
+        "id": holding.id,
+        "name": holding.name,
+        "short_name": holding.short_name,
+        "isin": holding.isin,
+        "instrument_type": holding.instrument_type,
+        "market": holding.market,
+        "currency": holding.currency,
+        "quantity": holding.quantity,
+        "acquisition_value": holding.acquisition_value or 0.0,
+        "ticker": holding.ticker,
+        "chart_source": holding.chart_source,
+        "chart_label": holding.chart_label,
+    }
+
+
+def _ledger_item_to_holding(item: dict[str, Any]) -> PortfolioHolding:
+    quantity = float(item.get("quantity") or 0.0)
+    acquisition_value = float(item.get("acquisition_value") or 0.0)
+    acquisition_price = acquisition_value / quantity if quantity else None
+    ticker = item.get("ticker")
+    return PortfolioHolding(
+        id=str(item.get("id") or item.get("isin") or _slug(str(item.get("name") or "holding"))),
+        name=str(item.get("name") or item.get("short_name") or "Okänt innehav"),
+        short_name=item.get("short_name"),
+        isin=item.get("isin"),
+        instrument_type=str(item.get("instrument_type") or "UNKNOWN"),
+        market=item.get("market"),
+        currency=item.get("currency"),
+        quantity=round(quantity, 6),
+        current_value=round(acquisition_value, 2),
+        acquisition_price_sek=_round(acquisition_price),
+        acquisition_value=round(acquisition_value, 2),
+        gain_abs=0.0,
+        gain_pct=0.0 if acquisition_value else None,
+        ticker=ticker,
+        chart_source=item.get("chart_source"),
+        chart_label=item.get("chart_label"),
+        has_chart=bool(ticker),
+        is_stale=not bool(ticker),
+    )
+
+
+def _read_transaction_rows(source_file: Path) -> list[tuple[str, dict[str, str]]]:
+    rows: list[tuple[str, dict[str, str]]] = []
+    with source_file.open(encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter=";")
+        for row in reader:
+            cleaned = {key.strip(): (value or "").strip() for key, value in row.items() if key is not None}
+            rows.append((_transaction_row_hash(cleaned), cleaned))
+    return rows
+
+
+def _transaction_sort_key(row: dict[str, str], index: int) -> tuple[str, int]:
+    return (row.get("Datum") or "", index)
+
+
+def _infer_transaction_ticker(row: dict[str, str], data_dir: Path) -> TickerMapping | None:
+    mapping = _load_ticker_mapping(data_dir)
+    synthetic_row = {
+        "ISIN": row.get("ISIN", ""),
+        "Namn": row.get("Värdepapper/beskrivning", ""),
+        "Kortnamn": row.get("Värdepapper/beskrivning", ""),
+        "Typ": "",
+        "Marknad": "",
+    }
+    return _infer_ticker_mapping(synthetic_row, mapping)
+
+
+def _ensure_ledger_holding(owner: dict[str, Any], row: dict[str, str], data_dir: Path) -> tuple[str, dict[str, Any]]:
+    isin = (row.get("ISIN") or "").strip() or None
+    name = (row.get("Värdepapper/beskrivning") or row.get("ISIN") or "Okänt innehav").strip()
+    key = f"isin:{isin.lower()}" if isin else f"name:{_normalized_name(name)}"
+    holdings = owner.setdefault("holdings", {})
+    if key not in holdings:
+        ticker_mapping = _infer_transaction_ticker(row, data_dir)
+        holdings[key] = {
+            "id": isin.lower() if isin else f"{_slug(name)}-{hashlib.sha1(name.encode('utf-8')).hexdigest()[:8]}",
+            "name": name,
+            "short_name": name,
+            "isin": isin,
+            "instrument_type": "UNKNOWN",
+            "market": None,
+            "currency": (row.get("Instrumentvaluta") or row.get("Transaktionsvaluta") or "SEK").strip() or "SEK",
+            "quantity": 0.0,
+            "acquisition_value": 0.0,
+            "ticker": ticker_mapping["ticker"] if ticker_mapping else None,
+            "chart_source": ticker_mapping["source"] if ticker_mapping else None,
+            "chart_label": ticker_mapping["label"] if ticker_mapping else None,
+        }
+    return key, holdings[key]
+
+
+def _apply_transaction_to_ledger_owner(owner: dict[str, Any], row: dict[str, str], data_dir: Path) -> None:
+    transaction_type = (row.get("Typ av transaktion") or "").strip()
+    account = (row.get("Konto") or "").strip().lower()
+    amount = _parse_decimal(row.get("Belopp")) or 0.0
+
+    if account == "bank" and transaction_type in {
+        "Autogiroinsättning",
+        "Inlåningsränta",
+        "Preliminärskatt kapitalränta",
+        "Intern överföring",
+    }:
+        owner["bank_value"] = round(float(owner.get("bank_value") or 0.0) + amount, 2)
+        return
+
+    if transaction_type not in {"Köp", "Sälj"}:
+        return
+
+    quantity = _parse_decimal(row.get("Antal")) or 0.0
+    if quantity <= 0:
+        return
+
+    _key, holding = _ensure_ledger_holding(owner, row, data_dir)
+    current_quantity = float(holding.get("quantity") or 0.0)
+    current_acquisition = float(holding.get("acquisition_value") or 0.0)
+
+    if transaction_type == "Köp":
+        holding["quantity"] = round(current_quantity + quantity, 6)
+        holding["acquisition_value"] = round(current_acquisition + abs(amount), 2)
+        return
+
+    sold_quantity = min(quantity, current_quantity)
+    average_cost = current_acquisition / current_quantity if current_quantity else 0.0
+    holding["quantity"] = round(current_quantity - sold_quantity, 6)
+    holding["acquisition_value"] = round(max(0.0, current_acquisition - average_cost * sold_quantity), 2)
+
+
+def _baseline_transactions_for_owner(owner: dict[str, Any], source_file: Path | None) -> None:
+    if source_file is None:
+        return
+    processed = owner.setdefault("processed_transactions", {})
+    for row_hash, row in _read_transaction_rows(source_file):
+        processed[row_hash] = {
+            "source_file": source_file.name,
+            "date": row.get("Datum"),
+            "type": row.get("Typ av transaktion"),
+            "baseline": True,
+        }
+
+
+def _seed_portfolio_ledger(base_dir: Path) -> dict[str, Any]:
+    now = datetime.now(timezone.utc).isoformat()
+    ledger = {
+        "version": 1,
+        "created_at": now,
+        "updated_at": now,
+        "seed": {"owners": {}},
+        "owners": {},
+    }
+    for owner_meta in portfolio_owner_dirs(base_dir):
+        owner_id = owner_meta["owner_id"]
+        owner_label = owner_meta["owner_label"]
+        data_dir = owner_meta["data_dir"]
+        owner = _empty_ledger_owner(owner_id, owner_label)
+        if data_dir.exists():
+            position_file = _latest_position_file(data_dir)
+            account_file = _latest_account_file(data_dir)
+            transaction_file = _latest_transaction_file(data_dir)
+            for holding in load_portfolio_holdings(data_dir):
+                owner["holdings"][_ledger_key_for_holding(holding)] = _holding_to_ledger_item(holding)
+            account = load_portfolio_account_value(data_dir, owner_id, owner_label)
+            owner["bank_value"] = account.bank_value
+            _baseline_transactions_for_owner(owner, transaction_file)
+            ledger["seed"]["owners"][owner_id] = {
+                "position_file": position_file.name if position_file else None,
+                "account_file": account_file.name if account_file else None,
+                "transaction_file": transaction_file.name if transaction_file else None,
+                "seeded_at": now,
+            }
+        ledger["owners"][owner_id] = owner
+    return ledger
+
+
+def _load_portfolio_ledger(base_dir: Path) -> dict[str, Any]:
+    ledger_path = portfolio_ledger_path(base_dir)
+    if not ledger_path.exists():
+        ledger = _seed_portfolio_ledger(base_dir)
+        _save_portfolio_ledger(base_dir, ledger)
+        return ledger
+    return json.loads(ledger_path.read_text(encoding="utf-8"))
+
+
+def _save_portfolio_ledger(base_dir: Path, ledger: dict[str, Any]) -> None:
+    base_dir.mkdir(parents=True, exist_ok=True)
+    ledger["updated_at"] = datetime.now(timezone.utc).isoformat()
+    portfolio_ledger_path(base_dir).write_text(json.dumps(ledger, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def update_portfolio_ledger_from_transactions(base_dir: Path | None = None) -> dict[str, Any]:
+    root = base_dir or portfolio_base_data_dir()
+    ledger = _load_portfolio_ledger(root)
+    applied: list[dict[str, Any]] = []
+    for owner_id, owner_label, data_dir, source_file in latest_portfolio_transaction_files(root):
+        owner = ledger.setdefault("owners", {}).setdefault(owner_id, _empty_ledger_owner(owner_id, owner_label))
+        owner["owner_label"] = owner_label
+        processed = owner.setdefault("processed_transactions", {})
+        rows = _read_transaction_rows(source_file)
+        new_rows = [(row_hash, row, index) for index, (row_hash, row) in enumerate(rows) if row_hash not in processed]
+        for row_hash, row, _index in sorted(new_rows, key=lambda item: _transaction_sort_key(item[1], item[2])):
+            _apply_transaction_to_ledger_owner(owner, row, data_dir)
+            processed[row_hash] = {
+                "source_file": source_file.name,
+                "date": row.get("Datum"),
+                "type": row.get("Typ av transaktion"),
+                "baseline": False,
+            }
+            applied.append({"owner_id": owner_id, "date": row.get("Datum"), "type": row.get("Typ av transaktion")})
+    if applied:
+        _save_portfolio_ledger(root, ledger)
+    return {"applied_count": len(applied), "applied": applied, "ledger_path": str(portfolio_ledger_path(root))}
+
+
+def load_portfolio_holdings_from_ledger(base_dir: Path | None = None) -> list[PortfolioHolding]:
+    root = base_dir or portfolio_base_data_dir()
+    update_portfolio_ledger_from_transactions(root)
+    ledger = _load_portfolio_ledger(root)
+    owner_holdings: list[tuple[str, str, PortfolioHolding]] = []
+    for owner_id, owner in ledger.get("owners", {}).items():
+        owner_label = owner.get("owner_label") or owner_id
+        for item in owner.get("holdings", {}).values():
+            if abs(float(item.get("quantity") or 0.0)) <= 0.000001:
+                continue
+            owner_holdings.append((owner_id, owner_label, _ledger_item_to_holding(item)))
+    return _merge_portfolio_holdings(owner_holdings)
+
+
+def load_portfolio_accounts_from_ledger(base_dir: Path | None = None) -> list[PortfolioAccountValue]:
+    root = base_dir or portfolio_base_data_dir()
+    update_portfolio_ledger_from_transactions(root)
+    ledger = _load_portfolio_ledger(root)
+    accounts: list[PortfolioAccountValue] = []
+    for owner_meta in portfolio_owner_dirs(root):
+        owner_id = owner_meta["owner_id"]
+        owner = ledger.get("owners", {}).get(owner_id, _empty_ledger_owner(owner_id, owner_meta["owner_label"]))
+        accounts.append(
+            PortfolioAccountValue(
+                owner_id=owner_id,
+                owner_label=owner.get("owner_label") or owner_meta["owner_label"],
+                total_value=round(float(owner.get("bank_value") or 0.0), 2),
+                bank_value=round(float(owner.get("bank_value") or 0.0), 2),
+                account_count=1 if owner.get("bank_value") is not None else 0,
+                source_file="portfolio-ledger.json",
+            )
+        )
+    return accounts
+
+
 def build_portfolio_totals(holdings: list[PortfolioHolding]) -> PortfolioTotals:
     current_value = sum(item.current_value for item in holdings)
     acquisition_value = sum(item.acquisition_value or 0.0 for item in holdings)
@@ -410,9 +833,37 @@ def enrich_holdings_with_market_data(holdings: list[PortfolioHolding]) -> list[P
             continue
         metrics = calculate_metrics(snapshot.last, snapshot.prev_close, snapshot.history)
         sparkline = [SparkPoint(t=point.t, v=round(point.close, 2)) for point in snapshot.history[-30:]]
+        value_update: dict[str, Any] = {}
+        can_value_in_sek = holding.chart_source == "direct" and (holding.currency == "SEK" or holding.ticker.endswith(".ST"))
+        if can_value_in_sek:
+            owners = []
+            for owner in holding.owners:
+                owner_current_value = round(owner.quantity * snapshot.last, 2)
+                owner_gain_abs = owner_current_value - owner.acquisition_value if owner.acquisition_value is not None else None
+                owner_gain_pct = (owner_gain_abs / owner.acquisition_value * 100.0) if owner_gain_abs is not None and owner.acquisition_value not in (None, 0) else None
+                owners.append(
+                    owner.model_copy(
+                        update={
+                            "current_value": owner_current_value,
+                            "gain_abs": _round(owner_gain_abs),
+                            "gain_pct": _round(owner_gain_pct),
+                        }
+                    )
+                )
+            current_value = round(sum(owner.current_value for owner in owners), 2)
+            acquisition_value = holding.acquisition_value
+            gain_abs = current_value - acquisition_value if acquisition_value is not None else None
+            gain_pct = (gain_abs / acquisition_value * 100.0) if gain_abs is not None and acquisition_value not in (None, 0) else None
+            value_update = {
+                "owners": owners,
+                "current_value": current_value,
+                "gain_abs": _round(gain_abs),
+                "gain_pct": _round(gain_pct),
+            }
         output.append(
             holding.model_copy(
                 update={
+                    **value_update,
                     "has_chart": bool(sparkline),
                     "last": _round(snapshot.last),
                     "day_abs": _round(metrics["day_abs"]),
@@ -443,6 +894,7 @@ def portfolio_meta(
     data_dir: Path,
     source_file: Path | None = None,
     source_files: list[tuple[str, Path]] | None = None,
+    refresh_files: list[tuple[str, str, Path]] | None = None,
 ) -> dict[str, Any]:
     return {
         "source": "local_avanza_export",
@@ -451,4 +903,5 @@ def portfolio_meta(
         "data_dir": str(data_dir),
         "source_file": source_file.name if source_file else None,
         "source_files": [{"owner_id": owner_id, "source_file": path.name} for owner_id, path in (source_files or [])],
+        "refresh_files": [{"owner_id": owner_id, "kind": kind, "source_file": path.name} for owner_id, kind, path in (refresh_files or [])],
     }
