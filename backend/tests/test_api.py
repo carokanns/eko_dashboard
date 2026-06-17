@@ -88,9 +88,6 @@ def test_load_instruments_default_path():
     assert emerging_markets.ticker == "EEM"
     thailand = next(item for item in instruments if item.id == "msci_thailand")
     assert thailand.ticker == "THD"
-    uranium_miners = next(item for item in instruments if item.id == "uranium_miners")
-    assert uranium_miners.module == "indexes"
-    assert uranium_miners.ticker == "URNM"
 
 
 def test_commodities_summary_response_shape_and_cache(client: TestClient, monkeypatch):

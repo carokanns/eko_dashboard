@@ -209,16 +209,6 @@ instruments:
     display_group: cards
     sort_order: 8
     module: indexes
-  - id: uranium_miners
-    name_sv: Uranium Miners
-    ticker: URNM
-    unit_label: USD
-    price_type: Sprott Uranium Miners ETF
-    badge_symbol: URNM
-    precision: 2
-    display_group: cards
-    sort_order: 9
-    module: indexes
   - id: us_10y_yield
     name_sv: US 10Y-ränta
     ticker: ^TNX
