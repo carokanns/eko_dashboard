@@ -7,10 +7,12 @@ import math
 import os
 import re
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, TypedDict
 
 import yaml
+import pandas as pd
 
 from app.core.config import InstrumentConfig, repo_root
 from app.models.portfolio import PortfolioAccountValue, PortfolioHolding, PortfolioOwnerValue, PortfolioTotals
@@ -84,11 +86,19 @@ def _latest_named_file(data_dir: Path, patterns: tuple[str, ...]) -> Path | None
 
 
 def _latest_account_file(data_dir: Path) -> Path | None:
-    return _latest_named_file(data_dir, ("*konto*.csv",))
+    return _latest_named_file(data_dir, ("*konto*.csv", "*konto*.ods"))
 
 
 def _latest_transaction_file(data_dir: Path) -> Path | None:
-    return _latest_named_file(data_dir, ("*transaktion*.csv", "*transaction*.csv"))
+    candidates: list[Path] = []
+    for pattern in ("*transaktion*.csv", "*transaktion*.ods", "*transaction*.csv", "*transaction*.ods"):
+        candidates.extend(data_dir.glob(pattern))
+    unique_candidates = sorted(
+        set(candidates),
+        key=lambda path: (_snapshot_date(path), path.suffix.lower() == ".ods", path.stat().st_mtime, path.name),
+        reverse=True,
+    )
+    return unique_candidates[0] if unique_candidates else None
 
 
 def latest_portfolio_refresh_files(base_dir: Path | None = None) -> list[tuple[str, str, Path, str, Path]]:
@@ -120,17 +130,14 @@ def portfolio_ledger_path(base_dir: Path | None = None) -> Path:
 
 def _transaction_file_signature(source_file: Path) -> dict[str, Any]:
     digest = hashlib.sha256()
-    row_count = 0
-    with source_file.open(encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter=";")
-        for row in reader:
-            row_count += 1
-            digest.update(json.dumps(row, ensure_ascii=False, sort_keys=True).encode("utf-8"))
-            digest.update(b"\n")
+    rows = _read_table_rows(source_file)
+    for row in rows:
+        digest.update(json.dumps(row, ensure_ascii=False, sort_keys=True).encode("utf-8"))
+        digest.update(b"\n")
     return {
         "source_file": source_file.name,
         "mtime_ns": source_file.stat().st_mtime_ns,
-        "row_count": row_count,
+        "row_count": len(rows),
         "sha256": digest.hexdigest(),
     }
 
@@ -233,11 +240,41 @@ def _holding_id_from_key(key: str, fallback: str) -> str:
 
 def _latest_position_file(data_dir: Path) -> Path | None:
     candidates = sorted(
-        data_dir.glob("*positioner*.csv"),
-        key=lambda path: path.stat().st_mtime,
+        set(data_dir.glob("*positioner*.csv")) | set(data_dir.glob("*positioner*.ods")),
+        key=lambda path: (_snapshot_date(path), path.stat().st_mtime, path.name),
         reverse=True,
     )
     return candidates[0] if candidates else None
+
+
+def _table_cell_to_str(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, float) and math.isnan(value):
+        return ""
+    if pd.isna(value):
+        return ""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    return str(value).strip()
+
+
+def _clean_table_row(row: dict[Any, Any]) -> dict[str, str]:
+    return {
+        str(key).strip().replace("\ufeff", ""): _table_cell_to_str(value)
+        for key, value in row.items()
+        if key is not None and str(key).strip() and not str(key).strip().lower().startswith("unnamed:")
+    }
+
+
+def _read_table_rows(source_file: Path) -> list[dict[str, str]]:
+    if source_file.suffix.lower() == ".ods":
+        frame = pd.read_excel(source_file, engine="odf", dtype=object, keep_default_na=False)
+        return [_clean_table_row(row) for row in frame.to_dict(orient="records")]
+
+    with source_file.open(encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter=";")
+        return [_clean_table_row(row) for row in reader]
 
 
 def _load_ticker_mapping(data_dir: Path) -> dict[str, TickerMapping]:
@@ -309,9 +346,35 @@ def _round(value: float | None, precision: int = 2) -> float | None:
 
 
 def _transaction_row_hash(row: dict[str, str]) -> str:
-    normalized = {key.strip(): (value or "").strip() for key, value in row.items()}
+    normalized = {key.strip(): _canonical_transaction_value(key, value) for key, value in row.items()}
     payload = json.dumps(normalized, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _canonical_decimal(value: str) -> str | None:
+    cleaned = value.strip().replace("\ufeff", "").replace(" ", "").replace("\xa0", "")
+    if not cleaned:
+        return ""
+    cleaned = cleaned.replace(",", ".")
+    try:
+        parsed = Decimal(cleaned)
+    except InvalidOperation:
+        return None
+    return format(parsed.normalize(), "f")
+
+
+def _canonical_transaction_value(key: str, value: str | None) -> str:
+    cleaned = (value or "").strip()
+    if cleaned.lower() in {"nan", "none", "<na>"}:
+        return ""
+    normalized_key = key.strip().lower()
+    if normalized_key in {"antal", "kurs", "belopp", "courtage", "valutakurs", "resultat"}:
+        parsed = _canonical_decimal(cleaned)
+        if parsed is not None:
+            return parsed
+    if normalized_key == "datum":
+        return cleaned[:10]
+    return " ".join(cleaned.split())
 
 
 def load_portfolio_holdings(data_dir: Path | None = None) -> list[PortfolioHolding]:
@@ -322,43 +385,41 @@ def load_portfolio_holdings(data_dir: Path | None = None) -> list[PortfolioHoldi
 
     mapping = _load_ticker_mapping(base_dir)
     holdings: list[PortfolioHolding] = []
-    with position_file.open(encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter=";")
-        for row in reader:
-            name = (row.get("Namn") or row.get("Kortnamn") or "").strip()
-            if not name:
-                continue
-            quantity = _parse_decimal(row.get("Volym")) or 0.0
-            current_value = _parse_decimal(row.get("Marknadsvärde")) or 0.0
-            acquisition_price = _parse_decimal(row.get("GAV (SEK)"))
-            acquisition_value = quantity * acquisition_price if acquisition_price is not None else None
-            gain_abs = current_value - acquisition_value if acquisition_value is not None else None
-            gain_pct = (gain_abs / acquisition_value * 100.0) if gain_abs is not None and acquisition_value not in (None, 0) else None
-            ticker_mapping = _infer_ticker_mapping(row, mapping)
-            ticker = ticker_mapping["ticker"] if ticker_mapping else None
+    for row in _read_table_rows(position_file):
+        name = (row.get("Namn") or row.get("Kortnamn") or "").strip()
+        if not name:
+            continue
+        quantity = _parse_decimal(row.get("Volym")) or 0.0
+        current_value = _parse_decimal(row.get("Marknadsvärde")) or 0.0
+        acquisition_price = _parse_decimal(row.get("GAV (SEK)"))
+        acquisition_value = quantity * acquisition_price if acquisition_price is not None else None
+        gain_abs = current_value - acquisition_value if acquisition_value is not None else None
+        gain_pct = (gain_abs / acquisition_value * 100.0) if gain_abs is not None and acquisition_value not in (None, 0) else None
+        ticker_mapping = _infer_ticker_mapping(row, mapping)
+        ticker = ticker_mapping["ticker"] if ticker_mapping else None
 
-            holdings.append(
-                PortfolioHolding(
-                    id=_stable_id(row),
-                    name=name,
-                    short_name=(row.get("Kortnamn") or "").strip() or None,
-                    isin=(row.get("ISIN") or "").strip() or None,
-                    instrument_type=(row.get("Typ") or "").strip() or "UNKNOWN",
-                    market=(row.get("Marknad") or "").strip() or None,
-                    currency=(row.get("Valuta") or "").strip() or None,
-                    quantity=round(quantity, 6),
-                    current_value=round(current_value, 2),
-                    acquisition_price_sek=_round(acquisition_price),
-                    acquisition_value=_round(acquisition_value),
-                    gain_abs=_round(gain_abs),
-                    gain_pct=_round(gain_pct),
-                    ticker=ticker,
-                    chart_source=ticker_mapping["source"] if ticker_mapping else None,
-                    chart_label=ticker_mapping["label"] if ticker_mapping else None,
-                    has_chart=bool(ticker),
-                    is_stale=not bool(ticker),
-                )
+        holdings.append(
+            PortfolioHolding(
+                id=_stable_id(row),
+                name=name,
+                short_name=(row.get("Kortnamn") or "").strip() or None,
+                isin=(row.get("ISIN") or "").strip() or None,
+                instrument_type=(row.get("Typ") or "").strip() or "UNKNOWN",
+                market=(row.get("Marknad") or "").strip() or None,
+                currency=(row.get("Valuta") or "").strip() or None,
+                quantity=round(quantity, 6),
+                current_value=round(current_value, 2),
+                acquisition_price_sek=_round(acquisition_price),
+                acquisition_value=_round(acquisition_value),
+                gain_abs=_round(gain_abs),
+                gain_pct=_round(gain_pct),
+                ticker=ticker,
+                chart_source=ticker_mapping["source"] if ticker_mapping else None,
+                chart_label=ticker_mapping["label"] if ticker_mapping else None,
+                has_chart=bool(ticker),
+                is_stale=not bool(ticker),
             )
+        )
 
     return sorted(holdings, key=lambda item: item.current_value, reverse=True)
 
@@ -378,14 +439,12 @@ def load_portfolio_account_value(data_dir: Path, owner_id: str, owner_label: str
     total_value = 0.0
     bank_value = 0.0
     account_count = 0
-    with account_file.open(encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter=";")
-        for row in reader:
-            value = _parse_decimal(row.get("Totalvärde")) or 0.0
-            total_value += value
-            account_count += 1
-            if (row.get("Kontotyp") or "").strip().lower() == "sparkonto":
-                bank_value += value
+    for row in _read_table_rows(account_file):
+        value = _parse_decimal(row.get("Totalvärde")) or 0.0
+        total_value += value
+        account_count += 1
+        if (row.get("Kontotyp") or "").strip().lower() == "sparkonto":
+            bank_value += value
 
     return PortfolioAccountValue(
         owner_id=owner_id,
@@ -597,11 +656,8 @@ def _ledger_item_to_holding(item: dict[str, Any]) -> PortfolioHolding:
 
 def _read_transaction_rows(source_file: Path) -> list[tuple[str, dict[str, str]]]:
     rows: list[tuple[str, dict[str, str]]] = []
-    with source_file.open(encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter=";")
-        for row in reader:
-            cleaned = {key.strip(): (value or "").strip() for key, value in row.items() if key is not None}
-            rows.append((_transaction_row_hash(cleaned), cleaned))
+    for row in _read_table_rows(source_file):
+        rows.append((_transaction_row_hash(row), row))
     return rows
 
 

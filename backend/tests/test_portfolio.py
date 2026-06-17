@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pandas as pd
 from fastapi.testclient import TestClient
 
 from app.models.summary import SparkPoint
@@ -75,6 +76,10 @@ def _write_transactions(data_dir, *, rows: list[str] | None = None):
     )
 
 
+def _write_ods(path, rows: list[dict[str, str]]) -> None:
+    pd.DataFrame(rows).to_excel(path, index=False, engine="odf")
+
+
 def test_portfolio_endpoint_is_disabled_without_flag(client: TestClient, monkeypatch):
     monkeypatch.delenv("ENABLE_LOCAL_PORTFOLIO", raising=False)
 
@@ -104,6 +109,67 @@ def test_parser_reads_positions_and_totals(tmp_path):
     assert totals.acquisition_value == 1200
     assert totals.holding_count == 2
     assert totals.chart_count == 1
+
+
+def test_parser_reads_ods_positions_accounts_and_transactions(tmp_path):
+    data_dir = tmp_path / "JP_avanza"
+    data_dir.mkdir()
+    _write_ods(
+        data_dir / "2026-06-11_positioner.ods",
+        [
+            {
+                "Namn": "Exempelbolag B",
+                "Kortnamn": "EX B",
+                "Volym": "10",
+                "Marknadsvärde": "1500,50",
+                "GAV (SEK)": "100,00",
+                "GAV": "100,00",
+                "Valuta": "SEK",
+                "Land": "SE",
+                "ISIN": "SE0000000001",
+                "Marknad": "XSTO",
+                "Typ": "STOCK",
+            }
+        ],
+    )
+    _write_ods(
+        data_dir / "2026-06-11_konto.ods",
+        [
+            {"Kontonummer": "1111-1111111", "Kontotyp": "Investeringssparkonto", "Totalvärde": "10000,00"},
+            {"Kontonummer": "2222-2222222", "Kontotyp": "Sparkonto", "Totalvärde": "1234,50"},
+        ],
+    )
+    _write_ods(
+        data_dir / "transaktioner_2026-01-01_2026-06-17.ods",
+        [
+            {
+                "Datum": "2026-06-02",
+                "Konto": "Bank",
+                "Typ av transaktion": "Autogiroinsättning",
+                "Värdepapper/beskrivning": "Autogiroinsättning",
+                "Antal": "",
+                "Kurs": "",
+                "Belopp": "1000",
+                "Transaktionsvaluta": "SEK",
+                "Courtage": "",
+                "Valutakurs": "",
+                "Instrumentvaluta": "",
+                "ISIN": "",
+                "Resultat": "",
+            }
+        ],
+    )
+
+    holdings = load_portfolio_holdings(data_dir)
+    accounts = load_portfolio_accounts(tmp_path)
+    refresh_files = latest_portfolio_refresh_files(tmp_path)
+    transaction_check = check_portfolio_transactions_for_updates(tmp_path)
+
+    assert holdings[0].name == "Exempelbolag B"
+    assert holdings[0].current_value == 1500.5
+    assert accounts[0].bank_value == 1234.5
+    assert refresh_files[0][4].suffix == ".ods"
+    assert transaction_check["owners"][0]["row_count"] == 1
 
 
 def test_local_fund_proxy_mapping_and_snapshots(tmp_path):
@@ -231,6 +297,35 @@ def test_transaction_files_are_refresh_signal_when_present(tmp_path):
     assert [(owner_id, kind, source_file.name) for owner_id, _owner_label, _data_dir, kind, source_file in refresh_files] == [
         ("pat", "transactions", "transaktioner_2026-01-01_2026-06-17.csv")
     ]
+
+
+def test_transaction_refresh_prefers_ods_when_csv_copy_exists(tmp_path):
+    data_dir = _write_single_position(tmp_path, "JP_avanza")
+    _write_transactions(data_dir)
+    _write_ods(
+        data_dir / "transaktioner_2026-01-01_2026-06-17.ods",
+        [
+            {
+                "Datum": "2026-06-02",
+                "Konto": "Bank",
+                "Typ av transaktion": "Autogiroinsättning",
+                "Värdepapper/beskrivning": "Autogiroinsättning",
+                "Antal": "",
+                "Kurs": "",
+                "Belopp": "1000",
+                "Transaktionsvaluta": "SEK",
+                "Courtage": "",
+                "Valutakurs": "",
+                "Instrumentvaluta": "",
+                "ISIN": "",
+                "Resultat": "",
+            }
+        ],
+    )
+
+    refresh_files = latest_portfolio_refresh_files(tmp_path)
+
+    assert refresh_files[0][4].name == "transaktioner_2026-01-01_2026-06-17.ods"
 
 
 def test_startup_transaction_check_tracks_new_rows(tmp_path):
