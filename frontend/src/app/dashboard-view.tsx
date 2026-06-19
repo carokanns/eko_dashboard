@@ -598,15 +598,16 @@ function SlideshowOverlay({
                     </p>
                   </div>
                   <div className="slideshow-value-block">
-                    <div className="kpi-subtle">Totalt nuvarande värde</div>
-                    <div className="slideshow-value">{formatSek(activeSlide.totals.current_value)}</div>
-                    <div className={`text-lg font-semibold ${changeToneClass(activeSlide.totals.gain_pct)}`}>
-                      Inköpsvärde {formatSek(activeSlide.totals.acquisition_value)} ({formatPercent(activeSlide.totals.gain_pct)})
-                    </div>
+                    <div className="kpi-subtle">Totalt inklusive bankkonto</div>
+                    <div className="slideshow-value">{formatSek(activeSlide.owners.reduce((sum, owner) => sum + owner.total_with_bank, 0))}</div>
                   </div>
                 </div>
                 <div className="mt-8 text-center">
-                  <div className="text-4xl font-semibold">Totalt: {formatSek(activeSlide.owners.reduce((sum, owner) => sum + owner.total_with_bank, 0))}</div>
+                  <div className="kpi-subtle">Totalt innehav</div>
+                  <div className="text-4xl font-semibold">{formatSek(activeSlide.totals.current_value)}</div>
+                  <div className={`mt-2 text-lg font-semibold ${changeToneClass(activeSlide.totals.gain_pct)}`}>
+                    Inköpsvärde {formatSek(activeSlide.totals.acquisition_value)} ({formatPercent(activeSlide.totals.gain_pct)})
+                  </div>
                 </div>
                 <div className="mt-8 grid gap-4 md:grid-cols-2">
                   {activeSlide.owners.map((owner) => (
