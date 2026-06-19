@@ -74,7 +74,7 @@ def portfolio_summary():
 
     fetched_at = datetime.now(timezone.utc)
     base_holdings = load_portfolio_holdings_from_ledger(data_dir)
-    holdings = enrich_holdings_with_market_data(base_holdings)
+    holdings = enrich_holdings_with_market_data(base_holdings, fund_cache_dir=data_dir)
     totals = build_portfolio_totals(holdings)
     accounts = load_portfolio_accounts_from_ledger(data_dir)
     payload = PortfolioSummaryResponse(

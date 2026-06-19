@@ -6,7 +6,7 @@ import json
 import math
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, TypedDict
@@ -18,6 +18,8 @@ from app.core.config import InstrumentConfig, repo_root
 from app.models.portfolio import PortfolioAccountValue, PortfolioHolding, PortfolioOwnerValue, PortfolioTotals
 from app.models.summary import SparkPoint
 from app.providers import yahoo_finance
+from app.providers import avanza_funds
+from app.core.settings import AVANZA_FUND_CACHE_SECONDS
 from app.services.market_data import calculate_metrics
 
 
@@ -126,6 +128,174 @@ def _transaction_state_path(base_dir: Path) -> Path:
 
 def portfolio_ledger_path(base_dir: Path | None = None) -> Path:
     return (base_dir or portfolio_base_data_dir()) / "portfolio-ledger.json"
+
+
+def fund_price_cache_path(base_dir: Path | None = None) -> Path:
+    return (base_dir or portfolio_base_data_dir()) / "fund-prices.json"
+
+
+def _parse_cache_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
+
+
+def _load_fund_price_cache(base_dir: Path) -> dict[str, dict[str, Any]]:
+    path = fund_price_cache_path(base_dir)
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    prices = payload.get("prices") if isinstance(payload, dict) else None
+    if not isinstance(prices, dict):
+        return {}
+    return {str(isin).lower(): entry for isin, entry in prices.items() if isinstance(entry, dict)}
+
+
+def _save_fund_price_cache(base_dir: Path, prices: dict[str, dict[str, Any]]) -> None:
+    base_dir.mkdir(parents=True, exist_ok=True)
+    path = fund_price_cache_path(base_dir)
+    temp_path = path.with_suffix(".tmp")
+    temp_path.write_text(
+        json.dumps({"version": 1, "prices": prices}, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    temp_path.replace(path)
+
+
+def _cache_entry_to_fund_nav(entry: dict[str, Any]) -> avanza_funds.FundNav | None:
+    try:
+        nav = float(entry["nav"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not math.isfinite(nav) or nav <= 0:
+        return None
+    isin = str(entry.get("isin") or "").strip().upper()
+    name = str(entry.get("name") or "").strip()
+    if not isin or not name:
+        return None
+    return avanza_funds.FundNav(
+        isin=isin,
+        name=name,
+        nav=nav,
+        nav_date=_parse_cache_timestamp(entry.get("nav_date")),
+        currency=str(entry.get("currency") or "").strip() or None,
+        orderbook_id=str(entry.get("orderbook_id") or "").strip() or None,
+    )
+
+
+def _fund_cache_entry(quote: avanza_funds.FundNav, fetched_at: datetime) -> dict[str, Any]:
+    return {
+        "isin": quote.isin,
+        "name": quote.name,
+        "nav": quote.nav,
+        "nav_date": quote.nav_date.isoformat() if quote.nav_date else None,
+        "currency": quote.currency,
+        "orderbook_id": quote.orderbook_id,
+        "fetched_at": fetched_at.isoformat(),
+    }
+
+
+def _apply_fund_nav(
+    holding: PortfolioHolding,
+    quote: avanza_funds.FundNav,
+    *,
+    fetched_at: datetime,
+    is_stale: bool,
+    stale_reason: str | None,
+) -> PortfolioHolding:
+    owners = [
+        owner.model_copy(
+            update={
+                "current_value": round(owner.quantity * quote.nav, 2),
+                "gain_abs": _round(owner.quantity * quote.nav - owner.acquisition_value)
+                if owner.acquisition_value is not None
+                else None,
+                "gain_pct": _round((owner.quantity * quote.nav - owner.acquisition_value) / owner.acquisition_value * 100.0)
+                if owner.acquisition_value not in (None, 0)
+                else None,
+            }
+        )
+        for owner in holding.owners
+    ]
+    current_value = round(sum(owner.current_value for owner in owners), 2) if owners else round(holding.quantity * quote.nav, 2)
+    acquisition_value = holding.acquisition_value
+    gain_abs = current_value - acquisition_value if acquisition_value is not None else None
+    gain_pct = (gain_abs / acquisition_value * 100.0) if gain_abs is not None and acquisition_value not in (None, 0) else None
+    return holding.model_copy(
+        update={
+            "owners": owners,
+            "current_value": current_value,
+            "gain_abs": _round(gain_abs),
+            "gain_pct": _round(gain_pct),
+            "valuation_source": "avanza_funds",
+            "valuation_fetched_at": fetched_at,
+            "valuation_is_stale": is_stale,
+            "valuation_stale_reason": stale_reason,
+        }
+    )
+
+
+def _enrich_fund_valuations(
+    holdings: list[PortfolioHolding],
+    *,
+    cache_dir: Path,
+) -> list[PortfolioHolding]:
+    now = datetime.now(timezone.utc)
+    cache = _load_fund_price_cache(cache_dir)
+    cache_changed = False
+    quote_by_isin: dict[str, tuple[avanza_funds.FundNav, datetime, bool, str | None]] = {}
+    candidates = {
+        holding.isin.lower(): holding
+        for holding in holdings
+        if holding.isin
+        and (holding.instrument_type.upper() == "FUND" or (holding.instrument_type.upper() == "UNKNOWN" and not holding.ticker))
+    }
+
+    for isin, holding in candidates.items():
+        cached_entry = cache.get(isin)
+        cached_quote = _cache_entry_to_fund_nav(cached_entry) if cached_entry else None
+        cached_at = _parse_cache_timestamp(cached_entry.get("fetched_at")) if cached_entry else None
+        is_fresh = cached_quote is not None and cached_at is not None and now - cached_at <= timedelta(seconds=AVANZA_FUND_CACHE_SECONDS)
+        if is_fresh:
+            quote_by_isin[isin] = (cached_quote, cached_at, False, None)
+            continue
+        try:
+            quote = avanza_funds.fetch_fund_nav(isin=holding.isin or "", name=holding.name)
+        except Exception as error:
+            if cached_quote is not None and cached_at is not None:
+                quote_by_isin[isin] = (cached_quote, cached_at, True, str(error))
+            continue
+        cache[isin] = _fund_cache_entry(quote, now)
+        cache_changed = True
+        quote_by_isin[isin] = (quote, now, False, None)
+
+    if cache_changed:
+        _save_fund_price_cache(cache_dir, cache)
+
+    output: list[PortfolioHolding] = []
+    for holding in holdings:
+        quote_data = quote_by_isin.get((holding.isin or "").lower())
+        if quote_data is None:
+            output.append(holding)
+            continue
+        quote, fetched_at, is_stale, stale_reason = quote_data
+        output.append(
+            _apply_fund_nav(
+                holding,
+                quote,
+                fetched_at=fetched_at,
+                is_stale=is_stale,
+                stale_reason=stale_reason,
+            )
+        )
+    return output
 
 
 def _transaction_file_signature(source_file: Path) -> dict[str, Any]:
@@ -611,6 +781,7 @@ def _ledger_key_for_holding(holding: PortfolioHolding) -> str:
 
 
 def _holding_to_ledger_item(holding: PortfolioHolding) -> dict[str, Any]:
+    current_price = holding.current_value / holding.quantity if holding.quantity else None
     return {
         "id": holding.id,
         "name": holding.name,
@@ -621,6 +792,7 @@ def _holding_to_ledger_item(holding: PortfolioHolding) -> dict[str, Any]:
         "currency": holding.currency,
         "quantity": holding.quantity,
         "acquisition_value": holding.acquisition_value or 0.0,
+        "current_price_sek": _round(current_price, 6),
         "ticker": holding.ticker,
         "chart_source": holding.chart_source,
         "chart_label": holding.chart_label,
@@ -631,6 +803,12 @@ def _ledger_item_to_holding(item: dict[str, Any]) -> PortfolioHolding:
     quantity = float(item.get("quantity") or 0.0)
     acquisition_value = float(item.get("acquisition_value") or 0.0)
     acquisition_price = acquisition_value / quantity if quantity else None
+    current_price = _parse_decimal(str(item.get("current_price_sek") or ""))
+    if current_price is None:
+        current_price = acquisition_price
+    current_value = quantity * current_price if current_price is not None else 0.0
+    gain_abs = current_value - acquisition_value
+    gain_pct = (gain_abs / acquisition_value * 100.0) if acquisition_value else None
     ticker = item.get("ticker")
     return PortfolioHolding(
         id=str(item.get("id") or item.get("isin") or _slug(str(item.get("name") or "holding"))),
@@ -641,11 +819,11 @@ def _ledger_item_to_holding(item: dict[str, Any]) -> PortfolioHolding:
         market=item.get("market"),
         currency=item.get("currency"),
         quantity=round(quantity, 6),
-        current_value=round(acquisition_value, 2),
+        current_value=round(current_value, 2),
         acquisition_price_sek=_round(acquisition_price),
         acquisition_value=round(acquisition_value, 2),
-        gain_abs=0.0,
-        gain_pct=0.0 if acquisition_value else None,
+        gain_abs=_round(gain_abs),
+        gain_pct=_round(gain_pct),
         ticker=ticker,
         chart_source=item.get("chart_source"),
         chart_label=item.get("chart_label"),
@@ -694,6 +872,7 @@ def _ensure_ledger_holding(owner: dict[str, Any], row: dict[str, str], data_dir:
             "currency": (row.get("Instrumentvaluta") or row.get("Transaktionsvaluta") or "SEK").strip() or "SEK",
             "quantity": 0.0,
             "acquisition_value": 0.0,
+            "current_price_sek": None,
             "ticker": ticker_mapping["ticker"] if ticker_mapping else None,
             "chart_source": ticker_mapping["source"] if ticker_mapping else None,
             "chart_label": ticker_mapping["label"] if ticker_mapping else None,
@@ -729,6 +908,8 @@ def _apply_transaction_to_ledger_owner(owner: dict[str, Any], row: dict[str, str
     if transaction_type == "Köp":
         holding["quantity"] = round(current_quantity + quantity, 6)
         holding["acquisition_value"] = round(current_acquisition + abs(amount), 2)
+        if _parse_decimal(str(holding.get("current_price_sek") or "")) is None:
+            holding["current_price_sek"] = round(abs(amount) / quantity, 6)
         return
 
     sold_quantity = min(quantity, current_quantity)
@@ -737,11 +918,17 @@ def _apply_transaction_to_ledger_owner(owner: dict[str, Any], row: dict[str, str
     holding["acquisition_value"] = round(max(0.0, current_acquisition - average_cost * sold_quantity), 2)
 
 
-def _baseline_transactions_for_owner(owner: dict[str, Any], source_file: Path | None) -> None:
+def _baseline_transactions_for_owner(
+    owner: dict[str, Any],
+    source_file: Path | None,
+    baseline_through: str | None,
+) -> None:
     if source_file is None:
         return
     processed = owner.setdefault("processed_transactions", {})
     for row_hash, row in _read_transaction_rows(source_file):
+        if baseline_through is not None and (row.get("Datum") or "") > baseline_through:
+            continue
         processed[row_hash] = {
             "source_file": source_file.name,
             "date": row.get("Datum"),
@@ -772,7 +959,11 @@ def _seed_portfolio_ledger(base_dir: Path) -> dict[str, Any]:
                 owner["holdings"][_ledger_key_for_holding(holding)] = _holding_to_ledger_item(holding)
             account = load_portfolio_account_value(data_dir, owner_id, owner_label)
             owner["bank_value"] = account.bank_value
-            _baseline_transactions_for_owner(owner, transaction_file)
+            _baseline_transactions_for_owner(
+                owner,
+                transaction_file,
+                _snapshot_date(position_file) if position_file else None,
+            )
             ledger["seed"]["owners"][owner_id] = {
                 "position_file": position_file.name if position_file else None,
                 "account_file": account_file.name if account_file else None,
@@ -781,6 +972,54 @@ def _seed_portfolio_ledger(base_dir: Path) -> dict[str, Any]:
             }
         ledger["owners"][owner_id] = owner
     return ledger
+
+
+def _backfill_ledger_current_prices(base_dir: Path, ledger: dict[str, Any]) -> bool:
+    """Initialize legacy ledgers once from their original position exports."""
+    changed = False
+    for owner_meta in portfolio_owner_dirs(base_dir):
+        owner = ledger.get("owners", {}).get(owner_meta["owner_id"])
+        data_dir = owner_meta["data_dir"]
+        if not owner or not data_dir.exists():
+            continue
+        missing_keys = [
+            key
+            for key, item in owner.get("holdings", {}).items()
+            if _parse_decimal(str(item.get("current_price_sek") or "")) is None
+        ]
+        if not missing_keys:
+            continue
+        source_holdings = {
+            _ledger_key_for_holding(holding): holding
+            for holding in load_portfolio_holdings(data_dir)
+        }
+        for key in missing_keys:
+            source_holding = source_holdings.get(key)
+            if source_holding is None or not source_holding.quantity:
+                continue
+            owner["holdings"][key]["current_price_sek"] = _round(
+                source_holding.current_value / source_holding.quantity,
+                6,
+            )
+            changed = True
+    return changed
+
+
+def _unbaseline_transactions_after_position_snapshot(ledger: dict[str, Any]) -> bool:
+    """Let legacy ledgers apply transactions that happened after their seed export."""
+    changed = False
+    seed_owners = ledger.get("seed", {}).get("owners", {})
+    for owner_id, owner in ledger.get("owners", {}).items():
+        position_file = seed_owners.get(owner_id, {}).get("position_file")
+        if not position_file:
+            continue
+        snapshot_date = _snapshot_date(Path(str(position_file)))
+        processed = owner.get("processed_transactions", {})
+        for row_hash, transaction in list(processed.items()):
+            if transaction.get("baseline") and (transaction.get("date") or "") > snapshot_date:
+                del processed[row_hash]
+                changed = True
+    return changed
 
 
 def _load_portfolio_ledger(base_dir: Path) -> dict[str, Any]:
@@ -801,6 +1040,8 @@ def _save_portfolio_ledger(base_dir: Path, ledger: dict[str, Any]) -> None:
 def update_portfolio_ledger_from_transactions(base_dir: Path | None = None) -> dict[str, Any]:
     root = base_dir or portfolio_base_data_dir()
     ledger = _load_portfolio_ledger(root)
+    ledger_changed = _backfill_ledger_current_prices(root, ledger)
+    ledger_changed = _unbaseline_transactions_after_position_snapshot(ledger) or ledger_changed
     applied: list[dict[str, Any]] = []
     for owner_id, owner_label, data_dir, source_file in latest_portfolio_transaction_files(root):
         owner = ledger.setdefault("owners", {}).setdefault(owner_id, _empty_ledger_owner(owner_id, owner_label))
@@ -817,7 +1058,7 @@ def update_portfolio_ledger_from_transactions(base_dir: Path | None = None) -> d
                 "baseline": False,
             }
             applied.append({"owner_id": owner_id, "date": row.get("Datum"), "type": row.get("Typ av transaktion")})
-    if applied:
+    if applied or ledger_changed:
         _save_portfolio_ledger(root, ledger)
     return {"applied_count": len(applied), "applied": applied, "ledger_path": str(portfolio_ledger_path(root))}
 
@@ -872,7 +1113,15 @@ def build_portfolio_totals(holdings: list[PortfolioHolding]) -> PortfolioTotals:
     )
 
 
-def enrich_holdings_with_market_data(holdings: list[PortfolioHolding]) -> list[PortfolioHolding]:
+def enrich_holdings_with_market_data(
+    holdings: list[PortfolioHolding],
+    *,
+    fund_cache_dir: Path | None = None,
+) -> list[PortfolioHolding]:
+    holdings = _enrich_fund_valuations(
+        holdings,
+        cache_dir=fund_cache_dir or portfolio_base_data_dir(),
+    )
     ticker_by_id = {item.id: item.ticker for item in holdings if item.ticker}
     if not ticker_by_id:
         return holdings

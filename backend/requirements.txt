@@ -7,5 +7,6 @@ yfinance==0.2.66
 numpy==1.26.4
 pandas==2.2.3
 odfpy==1.4.1
+playwright==1.54.0
 sqlalchemy==2.0.36
 alembic==1.13.3

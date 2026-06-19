@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
@@ -11,15 +12,18 @@ from app.services.portfolio_data import (
     build_portfolio_totals,
     check_portfolio_transactions_for_updates,
     enrich_holdings_with_market_data,
+    fund_price_cache_path,
     latest_portfolio_refresh_files,
     load_combined_portfolio_holdings,
     load_portfolio_accounts_from_ledger,
     load_portfolio_accounts,
     load_portfolio_holdings_from_ledger,
     load_portfolio_holdings,
+    portfolio_ledger_path,
     save_portfolio_snapshot,
     update_portfolio_ledger_from_transactions,
 )
+from app.providers.avanza_funds import FundNav
 
 
 def _write_positions(tmp_path, dirname="avanza"):
@@ -369,8 +373,27 @@ def test_ledger_seed_baselines_existing_transactions(tmp_path):
 
     assert first_update["applied_count"] == 0
     assert holdings[0].quantity == 10
+    assert holdings[0].current_value == 1500
     assert holdings[0].acquisition_value == 1000
     assert accounts[0].bank_value == 1234
+
+
+def test_ledger_seed_applies_transactions_after_position_snapshot(tmp_path):
+    data_dir = _write_single_position(tmp_path, "JP_avanza", quantity="10", current_value="1500,00", acquisition_price="100,00")
+    _write_transactions(
+        data_dir,
+        rows=[
+            "2026-06-02;Bas ISK;Autogiroinsättning;Autogiroinsättning;;;1000;SEK;;;;;",
+            "2026-06-12;Bas ISK;Köp;Exempelbolag B;2;100;-200;SEK;;;SEK;SE0000000001;",
+        ],
+    )
+
+    update = update_portfolio_ledger_from_transactions(tmp_path)
+    holding = load_portfolio_holdings_from_ledger(tmp_path)[0]
+
+    assert update["applied_count"] == 1
+    assert holding.quantity == 12
+    assert holding.acquisition_value == 1200
 
 
 def test_ledger_applies_new_buy_transaction_after_seed(tmp_path):
@@ -396,7 +419,25 @@ def test_ledger_applies_new_buy_transaction_after_seed(tmp_path):
 
     assert update["applied_count"] == 1
     assert holdings[0].quantity == 12
+    assert holdings[0].current_value == 1800
     assert holdings[0].acquisition_value == 1200
+
+
+def test_legacy_ledger_backfills_current_price_from_initial_positions(tmp_path):
+    data_dir = _write_single_position(tmp_path, "JP_avanza", quantity="10", current_value="1500,00", acquisition_price="100,00")
+    _write_transactions(data_dir, rows=[])
+    update_portfolio_ledger_from_transactions(tmp_path)
+
+    ledger_path = portfolio_ledger_path(tmp_path)
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    del ledger["owners"]["jp"]["holdings"]["isin:se0000000001"]["current_price_sek"]
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+    update_portfolio_ledger_from_transactions(tmp_path)
+    holding = load_portfolio_holdings_from_ledger(tmp_path)[0]
+
+    assert holding.current_value == 1500
+    assert holding.gain_abs == 500
 
 
 def test_ledger_applies_new_bank_transaction_after_seed(tmp_path):
@@ -455,13 +496,97 @@ def test_market_enrichment_converts_usd_stock_value_to_sek(tmp_path, monkeypatch
     assert enriched.gain_abs == round(34320.0 - 10713.56, 2)
 
 
+def test_fund_nav_updates_combined_and_owner_values_without_changing_costs(tmp_path, monkeypatch):
+    _write_single_position(
+        tmp_path,
+        "JP_avanza",
+        name="Exempelfond",
+        short_name="Exempelfond",
+        isin="SE0000000999",
+        quantity="10",
+        current_value="750,00",
+        acquisition_price="50,00",
+        instrument_type="FUND",
+    )
+    _write_single_position(
+        tmp_path,
+        "Pat_avanza",
+        name="Exempelfond",
+        short_name="Exempelfond",
+        isin="SE0000000999",
+        quantity="5",
+        current_value="500,00",
+        acquisition_price="60,00",
+        instrument_type="FUND",
+    )
+    now = datetime.now(timezone.utc)
+
+    monkeypatch.setattr(
+        "app.services.portfolio_data.avanza_funds.fetch_fund_nav",
+        lambda *, isin, name: FundNav(isin=isin, name=name, nav=100.0, nav_date=now, currency="SEK", orderbook_id="1"),
+    )
+
+    holding = enrich_holdings_with_market_data(
+        load_combined_portfolio_holdings(tmp_path),
+        fund_cache_dir=tmp_path,
+    )[0]
+
+    assert holding.current_value == 1500
+    assert holding.acquisition_value == 800
+    assert holding.gain_abs == 700
+    assert [owner.current_value for owner in holding.owners] == [1000, 500]
+    assert [owner.gain_abs for owner in holding.owners] == [500, 200]
+    assert holding.valuation_source == "avanza_funds"
+    assert holding.valuation_is_stale is False
+    assert fund_price_cache_path(tmp_path).exists()
+
+
+def test_fund_nav_uses_expired_cached_value_when_avanza_is_unavailable(tmp_path, monkeypatch):
+    _write_single_position(
+        tmp_path,
+        "JP_avanza",
+        name="Exempelfond",
+        short_name="Exempelfond",
+        isin="SE0000000999",
+        quantity="10",
+        current_value="750,00",
+        acquisition_price="50,00",
+        instrument_type="FUND",
+    )
+    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(
+        "app.services.portfolio_data.avanza_funds.fetch_fund_nav",
+        lambda *, isin, name: FundNav(isin=isin, name=name, nav=100.0, nav_date=now, currency="SEK", orderbook_id="1"),
+    )
+    initial = load_combined_portfolio_holdings(tmp_path)
+    enrich_holdings_with_market_data(initial, fund_cache_dir=tmp_path)
+
+    cache_path = fund_price_cache_path(tmp_path)
+    cache = json.loads(cache_path.read_text(encoding="utf-8"))
+    cache["prices"]["se0000000999"]["fetched_at"] = (now - timedelta(hours=21)).isoformat()
+    cache_path.write_text(json.dumps(cache), encoding="utf-8")
+    monkeypatch.setattr(
+        "app.services.portfolio_data.avanza_funds.fetch_fund_nav",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("Avanza unavailable")),
+    )
+
+    holding = enrich_holdings_with_market_data(
+        load_combined_portfolio_holdings(tmp_path),
+        fund_cache_dir=tmp_path,
+    )[0]
+
+    assert holding.current_value == 1000
+    assert holding.valuation_is_stale is True
+    assert holding.valuation_stale_reason == "Avanza unavailable"
+
+
 def test_portfolio_summary_with_flag_and_local_file(client: TestClient, monkeypatch, tmp_path):
     data_dir = _write_positions(tmp_path, "JP_avanza")
     _write_account_summary(data_dir, bank_value="1234,50", isk_value="1750,50")
     _write_transactions(data_dir)
     now = datetime.now(timezone.utc)
 
-    def fake_enrich(holdings):
+    def fake_enrich(holdings, **_kwargs):
         return [
             item.model_copy(
                 update={
@@ -490,7 +615,7 @@ def test_portfolio_summary_with_flag_and_local_file(client: TestClient, monkeypa
     payload = response.json()
     assert payload["enabled"] is True
     assert payload["meta"]["source"] == "local_avanza_export"
-    assert payload["totals"]["current_value"] == 1200
+    assert payload["totals"]["current_value"] == 1750.5
     assert len(payload["holdings"]) == 2
     assert payload["holdings"][0]["has_chart"] is True
     assert payload["holdings"][1]["has_chart"] is False

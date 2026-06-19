@@ -93,6 +93,10 @@ export type PortfolioHolding = {
   y1_pct: number | null;
   timestamp_local: string | null;
   is_stale: boolean;
+  valuation_source?: string | null;
+  valuation_fetched_at?: string | null;
+  valuation_is_stale?: boolean;
+  valuation_stale_reason?: string | null;
   sparkline: SparkPoint[];
   owners: PortfolioOwnerValue[];
 };

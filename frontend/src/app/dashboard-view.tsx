@@ -599,7 +599,7 @@ function SlideshowOverlay({
                   </div>
                   <div className="slideshow-value-block">
                     <div className="kpi-subtle">Totalt inklusive bankkonto</div>
-                    <div className="slideshow-value">{formatSek(activeSlide.owners.reduce((sum, owner) => sum + owner.total_with_bank, 0))}</div>
+                    <div className="slideshow-value slideshow-total-value">{formatSek(activeSlide.owners.reduce((sum, owner) => sum + owner.total_with_bank, 0))}</div>
                   </div>
                 </div>
                 <div className="mt-8 text-center">
@@ -1224,6 +1224,7 @@ export function DashboardView({
                   <span>Inköpsvärde: <span className="text-strong font-semibold">{formatOwnerAcquisitionValues(selectedPortfolioHolding)}</span></span>
                   <span>Resultat: <span className={changeToneClass(selectedPortfolioHolding.gain_pct)}>{formatSek(selectedPortfolioHolding.gain_abs)} ({formatPercent(selectedPortfolioHolding.gain_pct)})</span></span>
                   {selectedPortfolioHolding.chart_source === "proxy" ? <span>Graf: <span className="text-strong font-semibold">proxy</span></span> : null}
+                  {selectedPortfolioHolding.valuation_is_stale ? <span>Fondkurs: <span className="text-strong font-semibold">senast kända</span></span> : null}
                 </div>
                 <Sparkline points={selectedPortfolioHolding.sparkline} heightClass="h-56" showXAxis />
               </article>

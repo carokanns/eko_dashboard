@@ -53,6 +53,10 @@ class PortfolioHolding(BaseModel):
     y1_pct: Optional[float] = None
     timestamp_local: Optional[datetime] = None
     is_stale: bool = True
+    valuation_source: Optional[str] = None
+    valuation_fetched_at: Optional[datetime] = None
+    valuation_is_stale: bool = False
+    valuation_stale_reason: Optional[str] = None
     sparkline: list[SparkPoint] = Field(default_factory=list)
     owners: list[PortfolioOwnerValue] = Field(default_factory=list)
 
