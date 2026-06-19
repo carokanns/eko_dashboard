@@ -101,6 +101,7 @@ type SlideshowLogEntry = {
   elapsedSincePreviousMs?: number;
   slideCount: number;
   intervalSeconds: number;
+  marketRangeLabel: string;
   isPaused: boolean;
   visibilityState: DocumentVisibilityState;
   userAgent: string;
@@ -522,6 +523,7 @@ function SlideshowOverlay({
   slides,
   activeIndex,
   intervalSeconds,
+  marketRangeLabel,
   isPaused,
   onClose,
   onNext,
@@ -532,6 +534,7 @@ function SlideshowOverlay({
   slides: SlideshowSlide[];
   activeIndex: number;
   intervalSeconds: number;
+  marketRangeLabel: string;
   isPaused: boolean;
   onClose: () => void;
   onNext: () => void;
@@ -549,6 +552,7 @@ function SlideshowOverlay({
             <div className="slideshow-controls slideshow-slide-controls">
               <span className="badge">{slides.length > 0 ? `${activeIndex + 1} / ${slides.length}` : "0 / 0"}</span>
               <span className="badge">{isPaused ? "Pausad" : `${intervalSeconds} s`}</span>
+              <span className="badge">{marketRangeLabel}</span>
               <button type="button" className="slideshow-control" onClick={onPrevious}>
                 Föregående
               </button>
@@ -826,6 +830,7 @@ export function DashboardView({
   const showInflation = activeTab === "inflation";
   const showPortfolio = activeTab === "portfolio" && hasPortfolio;
   const visibleTabs = hasPortfolio ? tabs : tabs.filter((tab) => tab.id !== "portfolio");
+  const marketRangeLabel = marketRanges.find((rangeOption) => rangeOption.id === marketRange)?.label ?? marketRange;
 
   const kpiItems = showMag7Table ? topMag7Cards(filteredMag7Items) : showIndexCards ? filteredIndexItems : filteredCommodityItems;
   const kpiTitle = showMag7Table ? "Magnificent 7" : showIndexCards ? "Index" : "Råvaror";
@@ -912,12 +917,13 @@ export function DashboardView({
       trigger,
       slideCount: slideshowSlides.length,
       intervalSeconds: slideshowIntervalSeconds,
+      marketRangeLabel,
       isPaused: paused,
       visibilityState: document.visibilityState,
       userAgent: navigator.userAgent,
       memory: captureBrowserMemory(),
     });
-  }, [activeSlideshowSlide, isSlideshowPaused, safeSlideshowIndex, slideshowIntervalSeconds, slideshowSlides]);
+  }, [activeSlideshowSlide, isSlideshowPaused, marketRangeLabel, safeSlideshowIndex, slideshowIntervalSeconds, slideshowSlides]);
   const openSlideshow = () => {
     setSlideshowIndex(0);
     setIsSlideshowPaused(false);
@@ -1336,6 +1342,7 @@ export function DashboardView({
           slides={slideshowSlides}
           activeIndex={safeSlideshowIndex}
           intervalSeconds={slideshowIntervalSeconds}
+          marketRangeLabel={marketRangeLabel}
           isPaused={isSlideshowPaused}
           onClose={() => setIsSlideshowOpen(false)}
           onNext={goToNextSlide}

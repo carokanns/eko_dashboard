@@ -646,6 +646,7 @@ test("opens slideshow with interval choice, table rows and controls", () => {
   const overlay = screen.getByTestId("slideshow-overlay");
   expect(within(overlay).getByRole("heading", { name: "Guld" })).toBeInTheDocument();
   expect(within(overlay).getByText("15 s")).toBeInTheDocument();
+  expect(within(overlay).getByText("1 mån")).toBeInTheDocument();
 
   fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
   expect(within(overlay).getByRole("heading", { name: "Brentolja" })).toBeInTheDocument();
