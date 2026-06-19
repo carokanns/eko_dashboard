@@ -601,7 +601,10 @@ function SlideshowOverlay({
                     </div>
                   </div>
                 </div>
-                <div className="mt-10 grid gap-4 md:grid-cols-2">
+                <div className="mt-8 text-center">
+                  <div className="text-4xl font-semibold">Totalt: {formatSek(activeSlide.owners.reduce((sum, owner) => sum + owner.total_with_bank, 0))}</div>
+                </div>
+                <div className="mt-8 grid gap-4 md:grid-cols-2">
                   {activeSlide.owners.map((owner) => (
                     <div key={owner.owner_id} className="card-surface p-5">
                       <div className="flex items-center justify-between gap-3">

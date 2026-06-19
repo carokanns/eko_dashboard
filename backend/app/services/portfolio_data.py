@@ -877,7 +877,25 @@ def enrich_holdings_with_market_data(holdings: list[PortfolioHolding]) -> list[P
     if not ticker_by_id:
         return holdings
 
-    snapshots, errors = yahoo_finance.fetch_quotes_with_history(tickers=ticker_by_id.values(), period="1y")
+    foreign_currencies = {
+        item.currency.upper()
+        for item in holdings
+        if item.ticker
+        and item.chart_source == "direct"
+        and item.currency
+        and item.currency.upper() != "SEK"
+        and not item.ticker.endswith(".ST")
+    }
+    exchange_ticker_by_currency = {currency: f"{currency}SEK=X" for currency in foreign_currencies}
+    snapshots, errors = yahoo_finance.fetch_quotes_with_history(
+        tickers=[*ticker_by_id.values(), *exchange_ticker_by_currency.values()],
+        period="1y",
+    )
+    sek_per_currency = {
+        currency: snapshot.last
+        for currency, ticker in exchange_ticker_by_currency.items()
+        if (snapshot := snapshots.get(ticker)) is not None and snapshot.last is not None
+    }
     output: list[PortfolioHolding] = []
     for holding in holdings:
         if not holding.ticker:
@@ -890,11 +908,12 @@ def enrich_holdings_with_market_data(holdings: list[PortfolioHolding]) -> list[P
         metrics = calculate_metrics(snapshot.last, snapshot.prev_close, snapshot.history)
         sparkline = [SparkPoint(t=point.t, v=round(point.close, 2)) for point in snapshot.history[-30:]]
         value_update: dict[str, Any] = {}
-        can_value_in_sek = holding.chart_source == "direct" and (holding.currency == "SEK" or holding.ticker.endswith(".ST"))
-        if can_value_in_sek:
+        currency = (holding.currency or "").upper()
+        sek_multiplier = 1.0 if currency == "SEK" or holding.ticker.endswith(".ST") else sek_per_currency.get(currency)
+        if holding.chart_source == "direct" and sek_multiplier is not None:
             owners = []
             for owner in holding.owners:
-                owner_current_value = round(owner.quantity * snapshot.last, 2)
+                owner_current_value = round(owner.quantity * snapshot.last * sek_multiplier, 2)
                 owner_gain_abs = owner_current_value - owner.acquisition_value if owner.acquisition_value is not None else None
                 owner_gain_pct = (owner_gain_abs / owner.acquisition_value * 100.0) if owner_gain_abs is not None and owner.acquisition_value not in (None, 0) else None
                 owners.append(

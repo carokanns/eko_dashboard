@@ -317,6 +317,7 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
   expect(within(overlay).getByText("JP")).toBeInTheDocument();
   expect(within(overlay).getByText("Pat")).toBeInTheDocument();
   expect(within(overlay).getByText("Inköpsvärde 1 200 kr (+45.88%)")).toBeInTheDocument();
+  expect(within(overlay).getByText("Totalt: 4 985 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("Bankkonto 1 235 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("Bankkonto 2 000 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("Totalt inkl. bankkonto 2 485 kr")).toBeInTheDocument();

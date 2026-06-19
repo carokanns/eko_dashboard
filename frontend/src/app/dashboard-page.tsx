@@ -83,12 +83,12 @@ export function DashboardPage() {
         mag7: {},
         indexes: {},
       };
-      let failedCount = 0;
+      const failedNames: string[] = [];
 
       const requests = [
-        ...marketIdsByModule.commodities.map((id) => ({ module: "commodities" as const, id, fetcher: fetchCommoditySeries })),
-        ...marketIdsByModule.mag7.map((id) => ({ module: "mag7" as const, id, fetcher: fetchMag7Series })),
-        ...marketIdsByModule.indexes.map((id) => ({ module: "indexes" as const, id, fetcher: fetchIndexSeries })),
+        ...(commoditiesQuery.data?.items ?? []).map((item) => ({ module: "commodities" as const, id: item.id, name: item.name, fetcher: fetchCommoditySeries })),
+        ...(mag7Query.data?.items ?? []).map((item) => ({ module: "mag7" as const, id: item.id, name: item.name, fetcher: fetchMag7Series })),
+        ...(indexesQuery.data?.items ?? []).map((item) => ({ module: "indexes" as const, id: item.id, name: item.name, fetcher: fetchIndexSeries })),
       ];
 
       await Promise.all(
@@ -97,39 +97,40 @@ export function DashboardPage() {
             const series = await request.fetcher(request.id, marketRange);
             results[request.module][request.id] = series.points;
           } catch {
-            failedCount += 1;
+            failedNames.push(request.name);
           }
         }),
       );
 
-      return { series: results, failedCount };
+      return { series: results, failedNames };
     },
   });
 
-  const portfolioIds = useMemo(
-    () => (portfolioQuery.data?.holdings ?? []).filter((item) => item.has_chart).map((item) => item.id),
+  const portfolioChartItems = useMemo(
+    () => (portfolioQuery.data?.holdings ?? []).filter((item) => item.has_chart),
     [portfolioQuery.data?.holdings],
   );
+  const portfolioIds = useMemo(() => portfolioChartItems.map((item) => item.id), [portfolioChartItems]);
 
   const portfolioSeriesQuery = useQuery({
     queryKey: ["portfolio-series", marketRange, portfolioIds],
     enabled: portfolioIds.length > 0,
     queryFn: async () => {
       const results: Record<string, SparkPoint[]> = {};
-      let failedCount = 0;
+      const failedNames: string[] = [];
 
       await Promise.all(
-        portfolioIds.map(async (id) => {
+        portfolioChartItems.map(async (item) => {
           try {
-            const series = await fetchPortfolioSeries(id, marketRange);
-            results[id] = series.points;
+            const series = await fetchPortfolioSeries(item.id, marketRange);
+            results[item.id] = series.points;
           } catch {
-            failedCount += 1;
+            failedNames.push(item.name);
           }
         }),
       );
 
-      return { series: results, failedCount };
+      return { series: results, failedNames };
     },
   });
 
@@ -160,9 +161,9 @@ export function DashboardPage() {
   if (mag7Query.isError) warnings.push("Kunde inte hamta Mag 7 just nu.");
   if (indexesQuery.isError) warnings.push("Kunde inte hamta index just nu.");
   if (inflationQuery.isError) warnings.push("Kunde inte hamta inflation just nu.");
-  if (marketSeriesQuery.data?.failedCount) warnings.push("Vissa marknadsserier kunde inte hamtas.");
+  if (marketSeriesQuery.data?.failedNames.length) warnings.push(`Marknadsserier kunde inte hamtas: ${marketSeriesQuery.data.failedNames.join(", ")}.`);
   if (portfolioQuery.isError) warnings.push("Kunde inte hamta Min Avanza just nu.");
-  if (portfolioSeriesQuery.data?.failedCount) warnings.push("Vissa portfoliografer kunde inte hamtas.");
+  if (portfolioSeriesQuery.data?.failedNames.length) warnings.push(`Portfoliografer kunde inte hamtas: ${portfolioSeriesQuery.data.failedNames.join(", ")}.`);
   if (inflationSeriesQuery.data?.failedCount) warnings.push("Vissa inflationsserier kunde inte hamtas.");
 
   return (

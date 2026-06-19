@@ -6,9 +6,11 @@ import pandas as pd
 from fastapi.testclient import TestClient
 
 from app.models.summary import SparkPoint
+from app.providers.yahoo_finance import HistoryPoint, QuoteSnapshot
 from app.services.portfolio_data import (
     build_portfolio_totals,
     check_portfolio_transactions_for_updates,
+    enrich_holdings_with_market_data,
     latest_portfolio_refresh_files,
     load_combined_portfolio_holdings,
     load_portfolio_accounts_from_ledger,
@@ -414,6 +416,43 @@ def test_ledger_applies_new_bank_transaction_after_seed(tmp_path):
 
     assert update["applied_count"] == 1
     assert accounts[0].bank_value == 1025
+
+
+def test_market_enrichment_converts_usd_stock_value_to_sek(tmp_path, monkeypatch):
+    data_dir = _write_single_position(
+        tmp_path,
+        "JP_avanza",
+        name="Uranium Energy",
+        short_name="UEC",
+        isin="US9168961038",
+        quantity="286",
+        current_value="10713,56",
+        acquisition_price="37,46",
+        market="XASE",
+    )
+    position_file = data_dir / "2026-06-11_positioner.csv"
+    position_file.write_text(
+        position_file.read_text(encoding="utf-8").replace(";SEK;SE;", ";USD;US;"),
+        encoding="utf-8",
+    )
+    holding = load_combined_portfolio_holdings(tmp_path)[0]
+    now = datetime.now(timezone.utc)
+
+    def fake_quotes(tickers, period):
+        assert set(tickers) == {"UEC", "USDSEK=X"}
+        return {
+            "UEC": QuoteSnapshot(timestamp=now, last=12.0, prev_close=11.5, history=[HistoryPoint(now, 12.0)]),
+            "USDSEK=X": QuoteSnapshot(timestamp=now, last=10.0, prev_close=9.9, history=[HistoryPoint(now, 10.0)]),
+        }, {}
+
+    monkeypatch.setattr("app.services.portfolio_data.yahoo_finance.fetch_quotes_with_history", fake_quotes)
+
+    enriched = enrich_holdings_with_market_data([holding])[0]
+
+    assert enriched.last == 12.0
+    assert enriched.current_value == 34320.0
+    assert enriched.owners[0].current_value == 34320.0
+    assert enriched.gain_abs == round(34320.0 - 10713.56, 2)
 
 
 def test_portfolio_summary_with_flag_and_local_file(client: TestClient, monkeypatch, tmp_path):
