@@ -78,7 +78,7 @@ ISIN finns redan i innehavet och verifieras mot Avanzas svar. Ingen lokal fondma
 
 - Backend hämtar NAV med ISIN-validering från Avanzas publika fond-API.
 - Fonder värderas som `antal andelar * NAV`, även när innehavet är sammanslaget för JP och Pat.
-- Kurser sparas lokalt i `local-data/fund-prices.json` i 20 timmar. Filen ligger under den redan ignorerade `local-data/`-mappen.
+- Kurser sparas lokalt i `local-data/fund-prices.json` i fyra timmar. Filen ligger under den redan ignorerade `local-data/`-mappen. Den kortare tiden fångar upp NAV-korrigeringar som Avanza kan publicera under samma NAV-datum.
 - Vid ett tillfälligt fel används senast sparade NAV. API:t markerar då värderingen som stale och den valda innehavsvyn visar `Fondkurs: senast kända`.
 - Ledgerns antal, inköpsvärden och bankkonto ändras inte av fondkursuppdateringen.
 
@@ -117,4 +117,4 @@ Införandet är klart. Antal, GAV och inköpsvärde kommer alltid från den loka
 | AMF Aktiefond Småbolag | Avanza publikt NAV | OMX Stockholm Benchmark GI via Yahoo Finance | Fond |
 | Bankkonto | Transaktions-ledgern | Ingen graf | Insättningar, ränta och skatt uppdaterar saldot |
 
-Fonders NAV hämtas anonymt från Avanzas publika fond-API, utan inloggning, och cachas lokalt i 20 timmar. Om Avanza tillfälligt inte svarar används den senast kända kursen och innehavet markeras med `Fondkurs: senast kända`.
+Fonders NAV hämtas anonymt från Avanzas publika fond-API, utan inloggning, och cachas lokalt i fyra timmar. Om Avanza tillfälligt inte svarar används den senast kända kursen och innehavet markeras med `Fondkurs: senast kända`.
