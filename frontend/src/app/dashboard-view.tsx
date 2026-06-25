@@ -172,11 +172,47 @@ function formatSignedValue(value: number | null, precision = 2): string {
   return `${sign}${value.toFixed(precision)}`;
 }
 
+function formatLevelPrice(value: number | null, currency: string | null | undefined): string {
+  if (value === null) return "--";
+  const formatted = value.toLocaleString("sv-SE", {
+    minimumFractionDigits: value >= 100 ? 0 : 2,
+    maximumFractionDigits: value >= 100 ? 0 : 2,
+  });
+  return currency ? `${formatted} ${currency}` : formatted;
+}
+
 function formatAbsAndPercent(dayAbs: number | null, dayPct: number | null): string {
   if (dayAbs === null && dayPct === null) return "--";
   if (dayAbs === null) return formatPercent(dayPct);
   if (dayPct === null) return formatSignedValue(dayAbs);
   return `${formatSignedValue(dayAbs)} (${formatPercent(dayPct)})`;
+}
+
+function PortfolioLevelsLine({ holding, compact = false }: { holding: PortfolioHolding; compact?: boolean }) {
+  const levels = holding.levels;
+  if (!levels) return null;
+  const currency = levels.currency ?? holding.currency;
+  const prefix = levels.source === "estimated" ? "Est." : levels.source === "manual+estimated" ? "Delvis est." : null;
+  const targetReached = levels.current_price !== null && levels.target_price !== null && levels.current_price >= levels.target_price;
+  const stopReached = levels.current_price !== null && levels.stop_price !== null && levels.current_price <= levels.stop_price;
+  return (
+    <div className={`text-muted flex flex-wrap gap-x-3 gap-y-1 ${compact ? "mt-3 text-xs" : "mt-2 text-sm"}`}>
+      {prefix ? <span>{prefix}</span> : null}
+      <span>Nu {formatLevelPrice(levels.current_price, currency)}</span>
+      {levels.target_price !== null ? (
+        <span className={targetReached ? "change-positive" : undefined}>
+          Mål {formatLevelPrice(levels.target_price, currency)}
+          {levels.target_distance_pct !== null ? ` (${formatPercent(levels.target_distance_pct)})` : ""}
+        </span>
+      ) : null}
+      {levels.stop_price !== null ? (
+        <span className={stopReached ? "change-negative" : undefined}>
+          Stopp {formatLevelPrice(levels.stop_price, currency)}
+          {levels.stop_distance_pct !== null ? ` (${formatPercent(levels.stop_distance_pct)})` : ""}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 function formatOwnerSekValues(holding: PortfolioHolding, field: "current_value" | "acquisition_value"): string {
@@ -658,6 +694,7 @@ function SlideshowOverlay({
                         {formatOwnerAcquisitionValues(activeSlide.holding)}
                       </div>
                     ) : null}
+                    <PortfolioLevelsLine holding={activeSlide.holding} />
                   </div>
                 </div>
                 <Sparkline points={activeSlide.holding.sparkline} heightClass="h-[55vh]" showXAxis />
@@ -1194,6 +1231,7 @@ export function DashboardView({
                   <div className={`mt-2 text-sm kpi-change ${changeToneClass(holding.gain_pct)}`}>
                     {formatSek(holding.gain_abs)} ({formatPercent(holding.gain_pct)})
                   </div>
+                  <PortfolioLevelsLine holding={holding} compact />
                   <Sparkline points={holding.sparkline} heightClass="h-16" />
                 </button>
               ))}
@@ -1226,6 +1264,7 @@ export function DashboardView({
                   {selectedPortfolioHolding.chart_source === "proxy" ? <span>Graf: <span className="text-strong font-semibold">proxy</span></span> : null}
                   {selectedPortfolioHolding.valuation_is_stale ? <span>Fondkurs: <span className="text-strong font-semibold">senast kända</span></span> : null}
                 </div>
+                <PortfolioLevelsLine holding={selectedPortfolioHolding} />
                 <Sparkline points={selectedPortfolioHolding.sparkline} heightClass="h-56" showXAxis />
               </article>
             ) : (

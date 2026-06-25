@@ -15,7 +15,7 @@ import yaml
 import pandas as pd
 
 from app.core.config import InstrumentConfig, repo_root
-from app.models.portfolio import PortfolioAccountValue, PortfolioHolding, PortfolioOwnerValue, PortfolioTotals
+from app.models.portfolio import PortfolioAccountValue, PortfolioHolding, PortfolioHoldingLevels, PortfolioOwnerValue, PortfolioTotals
 from app.models.summary import SparkPoint
 from app.providers import yahoo_finance
 from app.providers import avanza_funds
@@ -27,6 +27,14 @@ class TickerMapping(TypedDict):
     ticker: str
     source: str
     label: str | None
+    currency: str | None
+
+
+class PortfolioLevel(TypedDict):
+    target_price: float | None
+    stop_price: float | None
+    currency: str | None
+    note: str | None
 
 
 BUILT_IN_TICKER_MAPPINGS: dict[str, TickerMapping] = {}
@@ -97,7 +105,7 @@ def _latest_transaction_file(data_dir: Path) -> Path | None:
         candidates.extend(data_dir.glob(pattern))
     unique_candidates = sorted(
         set(candidates),
-        key=lambda path: (_snapshot_date(path), path.suffix.lower() == ".ods", path.stat().st_mtime, path.name),
+        key=lambda path: (_latest_date_in_filename(path), path.suffix.lower() == ".ods", path.stat().st_mtime, path.name),
         reverse=True,
     )
     return unique_candidates[0] if unique_candidates else None
@@ -132,6 +140,10 @@ def portfolio_ledger_path(base_dir: Path | None = None) -> Path:
 
 def fund_price_cache_path(base_dir: Path | None = None) -> Path:
     return (base_dir or portfolio_base_data_dir()) / "fund-prices.json"
+
+
+def portfolio_levels_path(base_dir: Path | None = None) -> Path:
+    return (base_dir or portfolio_base_data_dir()) / "portfolio-levels.yaml"
 
 
 def _parse_cache_timestamp(value: object) -> datetime | None:
@@ -466,12 +478,161 @@ def _load_ticker_mapping(data_dir: Path) -> dict[str, TickerMapping]:
             "ticker": ticker,
             "source": str(item.get("source") or "manual").strip() or "manual",
             "label": str(item.get("label") or "").strip() or None,
+            "currency": str(item.get("currency") or "").strip().upper() or None,
         }
         for key in ("isin", "short_name", "name"):
             value = str(item.get(key) or "").strip()
             if value:
                 result[f"{key}:{value.lower()}"] = mapping
     return result
+
+
+def _normalize_ticker(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+def _load_portfolio_levels(base_dir: Path) -> dict[str, dict[str, PortfolioLevel]]:
+    path = portfolio_levels_path(base_dir)
+    empty: dict[str, dict[str, PortfolioLevel]] = {"isin": {}, "ticker": {}, "name": {}}
+    if not path.exists():
+        return empty
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return empty
+    rows = data.get("levels", data) if isinstance(data, dict) else data
+    if not isinstance(rows, list):
+        return empty
+
+    result: dict[str, dict[str, PortfolioLevel]] = {"isin": {}, "ticker": {}, "name": {}}
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        target_price = _parse_decimal(str(item.get("target_price") or ""))
+        stop_price = _parse_decimal(str(item.get("stop_price") or ""))
+        if target_price is None and stop_price is None:
+            continue
+        level: PortfolioLevel = {
+            "target_price": target_price,
+            "stop_price": stop_price,
+            "currency": str(item.get("currency") or "").strip().upper() or None,
+            "note": str(item.get("note") or "").strip() or None,
+        }
+        for source, raw_value in (
+            ("isin", item.get("isin")),
+            ("ticker", item.get("ticker")),
+            ("name", item.get("name") or item.get("short_name")),
+        ):
+            value = str(raw_value or "").strip()
+            if not value:
+                continue
+            if source == "isin":
+                result[source][value.lower()] = level
+            elif source == "ticker":
+                result[source][_normalize_ticker(value)] = level
+            else:
+                result[source][_normalized_name(value)] = level
+            break
+    return result
+
+
+def _match_portfolio_level(holding: PortfolioHolding, levels: dict[str, dict[str, PortfolioLevel]]) -> tuple[str, PortfolioLevel] | None:
+    isin = (holding.isin or "").strip().lower()
+    if isin and isin in levels["isin"]:
+        return "isin", levels["isin"][isin]
+    ticker = _normalize_ticker(holding.ticker)
+    if ticker and ticker in levels["ticker"]:
+        return "ticker", levels["ticker"][ticker]
+    name = _normalized_name(holding.name)
+    if name and name in levels["name"]:
+        return "name", levels["name"][name]
+    return None
+
+
+def _comparison_price(holding: PortfolioHolding) -> float | None:
+    instrument_type = holding.instrument_type.upper()
+    if instrument_type == "FUND" and holding.quantity:
+        return _round(holding.current_value / holding.quantity, 6)
+    if holding.last is not None:
+        return holding.last
+    if instrument_type == "FUND" and holding.quantity:
+        return _round(holding.current_value / holding.quantity, 6)
+    return None
+
+
+def _clamp(value: float, lower: float, upper: float) -> float:
+    return min(max(value, lower), upper)
+
+
+def _estimated_portfolio_level(holding: PortfolioHolding, current_price: float | None) -> PortfolioLevel | None:
+    if current_price is None or current_price <= 0:
+        return None
+
+    closes = [point.v for point in holding.sparkline if point.v > 0]
+    daily_moves = [
+        abs(closes[index] / closes[index - 1] - 1.0)
+        for index in range(1, len(closes))
+        if closes[index - 1] > 0
+    ]
+    average_daily_move = sum(daily_moves) / len(daily_moves) if daily_moves else 0.0
+    stop_pct = _clamp(max(0.08, average_daily_move * 3.0), 0.06, 0.20)
+    target_pct = _clamp(max(0.12, stop_pct * 1.6, average_daily_move * 5.0), 0.10, 0.35)
+
+    recent_low = min(closes) if closes else current_price
+    recent_high = max(closes) if closes else current_price
+    support_stop = recent_low * 0.98 if recent_low < current_price else current_price * (1.0 - stop_pct)
+    resistance_target = recent_high * 1.03 if recent_high > current_price else current_price * (1.0 + target_pct)
+
+    stop_price = _clamp(min(current_price * (1.0 - stop_pct), support_stop), current_price * 0.75, current_price * 0.96)
+    target_price = _clamp(max(current_price * (1.0 + target_pct), resistance_target), current_price * 1.05, current_price * 1.50)
+    return {
+        "target_price": _round(target_price),
+        "stop_price": _round(stop_price),
+        "currency": holding.currency,
+        "note": "Uppskattad fran kursrorelse: stopp ca 6-20% ned, mal minst 1,6x risken upp.",
+    }
+
+
+def apply_portfolio_levels(holdings: list[PortfolioHolding], base_dir: Path | None = None) -> list[PortfolioHolding]:
+    levels = _load_portfolio_levels(base_dir or portfolio_base_data_dir())
+    output: list[PortfolioHolding] = []
+    for holding in holdings:
+        current_price = _comparison_price(holding)
+        match = _match_portfolio_level(holding, levels)
+        estimate = _estimated_portfolio_level(holding, current_price)
+        if match is None and estimate is None:
+            output.append(holding)
+            continue
+        match_source, level = match if match is not None else ("estimated", estimate)
+        has_manual_target = match is not None and level["target_price"] is not None
+        has_manual_stop = match is not None and level["stop_price"] is not None
+        if estimate is not None:
+            level = {
+                "target_price": level["target_price"] if level["target_price"] is not None else estimate["target_price"],
+                "stop_price": level["stop_price"] if level["stop_price"] is not None else estimate["stop_price"],
+                "currency": level["currency"] or estimate["currency"],
+                "note": level["note"] or estimate["note"],
+            }
+        target_price = level["target_price"]
+        stop_price = level["stop_price"]
+        target_distance = target_price - current_price if target_price is not None and current_price is not None else None
+        stop_distance = current_price - stop_price if stop_price is not None and current_price is not None else None
+        source = "manual" if has_manual_target and has_manual_stop else "manual+estimated" if match is not None else "estimated"
+        level_model = PortfolioHoldingLevels(
+            target_price=target_price,
+            stop_price=stop_price,
+            currency=level["currency"] or holding.currency,
+            current_price=current_price,
+            target_distance=_round(target_distance),
+            target_distance_pct=_round(target_distance / current_price * 100.0) if target_distance is not None and current_price else None,
+            stop_distance=_round(stop_distance),
+            stop_distance_pct=_round(stop_distance / current_price * 100.0) if stop_distance is not None and current_price else None,
+            match_source=match_source,
+            source=source,
+            note=level["note"],
+        )
+        output.append(holding.model_copy(update={"levels": level_model}))
+    return output
 
 
 def _infer_ticker_mapping(row: dict[str, str], mapping: dict[str, TickerMapping]) -> TickerMapping | None:
@@ -496,9 +657,9 @@ def _infer_ticker_mapping(row: dict[str, str], mapping: dict[str, TickerMapping]
 
     yahoo_symbol = short_name.replace(" ", "-")
     if market == "XSTO":
-        return {"ticker": f"{yahoo_symbol}.ST", "source": "direct", "label": None}
+        return {"ticker": f"{yahoo_symbol}.ST", "source": "direct", "label": None, "currency": "SEK"}
     if market in {"XNYS", "XNAS", "XASE", "ARCX"}:
-        return {"ticker": yahoo_symbol, "source": "direct", "label": None}
+        return {"ticker": yahoo_symbol, "source": "direct", "label": None, "currency": "USD"}
     return None
 
 
@@ -507,6 +668,14 @@ def _snapshot_date(source_file: Path) -> str:
     if match:
         return match.group(0)
     return datetime.now(timezone.utc).date().isoformat()
+
+
+def _latest_date_in_filename(source_file: Path) -> str:
+    """Use a transaction export's end date when its filename contains a range."""
+    dates = re.findall(r"\d{4}-\d{2}-\d{2}", source_file.name)
+    if dates:
+        return max(dates)
+    return _snapshot_date(source_file)
 
 
 def _round(value: float | None, precision: int = 2) -> float | None:
@@ -576,7 +745,7 @@ def load_portfolio_holdings(data_dir: Path | None = None) -> list[PortfolioHoldi
                 isin=(row.get("ISIN") or "").strip() or None,
                 instrument_type=(row.get("Typ") or "").strip() or "UNKNOWN",
                 market=(row.get("Marknad") or "").strip() or None,
-                currency=(row.get("Valuta") or "").strip() or None,
+                currency=(ticker_mapping["currency"] if ticker_mapping and ticker_mapping["currency"] else (row.get("Valuta") or "").strip() or None),
                 quantity=round(quantity, 6),
                 current_value=round(current_value, 2),
                 acquisition_price_sek=_round(acquisition_price),
@@ -769,6 +938,11 @@ def _empty_ledger_owner(owner_id: str, owner_label: str) -> dict[str, Any]:
         "bank_value": 0.0,
         "holdings": {},
         "processed_transactions": {},
+        "transaction_checkpoint": {
+            "source_file": None,
+            "latest_transaction_date": None,
+            "updated_at": None,
+        },
     }
 
 
@@ -835,8 +1009,26 @@ def _ledger_item_to_holding(item: dict[str, Any]) -> PortfolioHolding:
 def _read_transaction_rows(source_file: Path) -> list[tuple[str, dict[str, str]]]:
     rows: list[tuple[str, dict[str, str]]] = []
     for row in _read_table_rows(source_file):
-        rows.append((_transaction_row_hash(row), row))
+        normalized_row = _normalize_transaction_row(row)
+        rows.append((_transaction_row_hash(normalized_row), normalized_row))
     return rows
+
+
+def _normalize_transaction_row(row: dict[str, str]) -> dict[str, str]:
+    """Repair the shifted amount columns emitted by some LibreOffice ODS exports."""
+    normalized = dict(row)
+    amount = _parse_decimal(normalized.get("Belopp"))
+    shifted_amount = _parse_decimal(normalized.get("Transaktionsvaluta"))
+    shifted_currency = (normalized.get("Valutakurs") or "").strip()
+    if amount is None or shifted_amount is None or not shifted_currency.isalpha():
+        return normalized
+
+    original_commission = normalized.get("Belopp") or ""
+    normalized["Belopp"] = normalized.get("Transaktionsvaluta") or ""
+    normalized["Transaktionsvaluta"] = shifted_currency
+    normalized["Courtage"] = original_commission
+    normalized["Valutakurs"] = ""
+    return normalized
 
 
 def _transaction_sort_key(row: dict[str, str], index: int) -> tuple[str, int]:
@@ -860,6 +1052,36 @@ def _ensure_ledger_holding(owner: dict[str, Any], row: dict[str, str], data_dir:
     name = (row.get("Värdepapper/beskrivning") or row.get("ISIN") or "Okänt innehav").strip()
     key = f"isin:{isin.lower()}" if isin else f"name:{_normalized_name(name)}"
     holdings = owner.setdefault("holdings", {})
+    matching_name_key = next(
+        (
+            existing_key
+            for existing_key, existing in holdings.items()
+            if _normalized_name(str(existing.get("name") or "")) == _normalized_name(name)
+        ),
+        None,
+    )
+    if isin and key not in holdings and matching_name_key and matching_name_key != key:
+        holding = holdings.pop(matching_name_key)
+        ticker_mapping = _infer_transaction_ticker(row, data_dir)
+        holding.update(
+            {
+                "id": isin.lower(),
+                "isin": isin,
+                "name": name,
+                "short_name": name,
+                "currency": (
+                    ticker_mapping["currency"]
+                    if ticker_mapping and ticker_mapping["currency"]
+                    else (row.get("Instrumentvaluta") or row.get("Transaktionsvaluta") or holding.get("currency") or "SEK").strip() or "SEK"
+                ),
+                "ticker": ticker_mapping["ticker"] if ticker_mapping else holding.get("ticker"),
+                "chart_source": ticker_mapping["source"] if ticker_mapping else holding.get("chart_source"),
+                "chart_label": ticker_mapping["label"] if ticker_mapping else holding.get("chart_label"),
+            }
+        )
+        holdings[key] = holding
+    elif not isin and matching_name_key:
+        key = matching_name_key
     if key not in holdings:
         ticker_mapping = _infer_transaction_ticker(row, data_dir)
         holdings[key] = {
@@ -869,7 +1091,11 @@ def _ensure_ledger_holding(owner: dict[str, Any], row: dict[str, str], data_dir:
             "isin": isin,
             "instrument_type": "UNKNOWN",
             "market": None,
-            "currency": (row.get("Instrumentvaluta") or row.get("Transaktionsvaluta") or "SEK").strip() or "SEK",
+            "currency": (
+                ticker_mapping["currency"]
+                if ticker_mapping and ticker_mapping["currency"]
+                else (row.get("Instrumentvaluta") or row.get("Transaktionsvaluta") or "SEK").strip() or "SEK"
+            ),
             "quantity": 0.0,
             "acquisition_value": 0.0,
             "current_price_sek": None,
@@ -898,6 +1124,8 @@ def _apply_transaction_to_ledger_owner(owner: dict[str, Any], row: dict[str, str
         return
 
     quantity = _parse_decimal(row.get("Antal")) or 0.0
+    if transaction_type == "Sälj":
+        quantity = abs(quantity)
     if quantity <= 0:
         return
 
@@ -1005,6 +1233,40 @@ def _backfill_ledger_current_prices(base_dir: Path, ledger: dict[str, Any]) -> b
     return changed
 
 
+def _backfill_ledger_ticker_mappings(base_dir: Path, ledger: dict[str, Any]) -> bool:
+    """Apply local ticker metadata to ledger holdings created from transactions."""
+    changed = False
+    for owner_meta in portfolio_owner_dirs(base_dir):
+        owner = ledger.get("owners", {}).get(owner_meta["owner_id"])
+        data_dir = owner_meta["data_dir"]
+        if not owner or not data_dir.exists():
+            continue
+        mapping = _load_ticker_mapping(data_dir)
+        for holding in owner.get("holdings", {}).values():
+            synthetic_row = {
+                "ISIN": str(holding.get("isin") or ""),
+                "Namn": str(holding.get("name") or ""),
+                "Kortnamn": str(holding.get("short_name") or ""),
+                "Typ": str(holding.get("instrument_type") or ""),
+                "Marknad": str(holding.get("market") or ""),
+            }
+            ticker_mapping = _infer_ticker_mapping(synthetic_row, mapping)
+            if ticker_mapping is None:
+                continue
+            updates = {
+                "ticker": ticker_mapping["ticker"],
+                "chart_source": ticker_mapping["source"],
+                "chart_label": ticker_mapping["label"],
+            }
+            if ticker_mapping["currency"]:
+                updates["currency"] = ticker_mapping["currency"]
+            for key, value in updates.items():
+                if holding.get(key) != value:
+                    holding[key] = value
+                    changed = True
+    return changed
+
+
 def _unbaseline_transactions_after_position_snapshot(ledger: dict[str, Any]) -> bool:
     """Let legacy ledgers apply transactions that happened after their seed export."""
     changed = False
@@ -1041,15 +1303,41 @@ def update_portfolio_ledger_from_transactions(base_dir: Path | None = None) -> d
     root = base_dir or portfolio_base_data_dir()
     ledger = _load_portfolio_ledger(root)
     ledger_changed = _backfill_ledger_current_prices(root, ledger)
+    ledger_changed = _backfill_ledger_ticker_mappings(root, ledger) or ledger_changed
     ledger_changed = _unbaseline_transactions_after_position_snapshot(ledger) or ledger_changed
     applied: list[dict[str, Any]] = []
     for owner_id, owner_label, data_dir, source_file in latest_portfolio_transaction_files(root):
         owner = ledger.setdefault("owners", {}).setdefault(owner_id, _empty_ledger_owner(owner_id, owner_label))
         owner["owner_label"] = owner_label
         processed = owner.setdefault("processed_transactions", {})
+        position_file = ledger.get("seed", {}).get("owners", {}).get(owner_id, {}).get("position_file")
+        baseline_through = _snapshot_date(Path(str(position_file))) if position_file else None
         rows = _read_transaction_rows(source_file)
+        latest_transaction_date = max((row.get("Datum") or "" for _row_hash, row in rows), default="") or None
+        checkpoint = owner.setdefault("transaction_checkpoint", {})
+        checkpoint_changed = (
+            checkpoint.get("source_file") != source_file.name
+            or checkpoint.get("latest_transaction_date") != latest_transaction_date
+        )
+        if checkpoint_changed:
+            checkpoint.update(
+                {
+                    "source_file": source_file.name,
+                    "latest_transaction_date": latest_transaction_date,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            ledger_changed = True
         new_rows = [(row_hash, row, index) for index, (row_hash, row) in enumerate(rows) if row_hash not in processed]
         for row_hash, row, _index in sorted(new_rows, key=lambda item: _transaction_sort_key(item[1], item[2])):
+            if baseline_through is not None and (row.get("Datum") or "") <= baseline_through:
+                processed[row_hash] = {
+                    "source_file": source_file.name,
+                    "date": row.get("Datum"),
+                    "type": row.get("Typ av transaktion"),
+                    "baseline": True,
+                }
+                continue
             _apply_transaction_to_ledger_owner(owner, row, data_dir)
             processed[row_hash] = {
                 "source_file": source_file.name,

@@ -67,6 +67,20 @@ export type PortfolioAccountValue = {
   source_file: string | null;
 };
 
+export type PortfolioHoldingLevels = {
+  target_price: number | null;
+  stop_price: number | null;
+  currency: string | null;
+  current_price: number | null;
+  target_distance: number | null;
+  target_distance_pct: number | null;
+  stop_distance: number | null;
+  stop_distance_pct: number | null;
+  match_source: string;
+  source: "manual" | "estimated" | "manual+estimated" | string;
+  note: string | null;
+};
+
 export type PortfolioHolding = {
   id: string;
   name: string;
@@ -97,6 +111,7 @@ export type PortfolioHolding = {
   valuation_fetched_at?: string | null;
   valuation_is_stale?: boolean;
   valuation_stale_reason?: string | null;
+  levels?: PortfolioHoldingLevels | null;
   sparkline: SparkPoint[];
   owners: PortfolioOwnerValue[];
 };

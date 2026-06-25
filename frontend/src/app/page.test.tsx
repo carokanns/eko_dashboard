@@ -189,6 +189,19 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
         y1_pct: 4,
         timestamp_local: "2026-02-07T10:00:00Z",
         is_stale: false,
+        levels: {
+          target_price: 145,
+          stop_price: 120,
+          currency: "SEK",
+          current_price: 150,
+          target_distance: -5,
+          target_distance_pct: -3.33,
+          stop_distance: 30,
+          stop_distance_pct: 20,
+          match_source: "ticker",
+          source: "manual",
+          note: null,
+        },
         sparkline: [
           { t: "2026-02-06T10:00:00Z", v: 145 },
           { t: "2026-02-07T10:00:00Z", v: 150 },
@@ -240,6 +253,19 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
         y1_pct: null,
         timestamp_local: null,
         is_stale: true,
+        levels: {
+          target_price: 140,
+          stop_price: 120,
+          currency: "SEK",
+          current_price: 100,
+          target_distance: 40,
+          target_distance_pct: 40,
+          stop_distance: -20,
+          stop_distance_pct: -20,
+          match_source: "estimated",
+          source: "estimated",
+          note: null,
+        },
         sparkline: [],
         owners: [
           {
@@ -303,10 +329,14 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
   expect(screen.getByText("1 751 kr")).toBeInTheDocument();
   expect(screen.getByTestId("portfolio-card-se0000000001")).toBeInTheDocument();
   expect(screen.getByTestId("portfolio-card-se0000000002")).toBeInTheDocument();
+  expect(within(screen.getByTestId("portfolio-card-se0000000001")).getByText("Mål 145 SEK (-3.33%)")).toHaveClass("change-positive");
+  expect(within(screen.getByTestId("portfolio-card-se0000000001")).getByText("Stopp 120 SEK (+20.00%)")).toBeInTheDocument();
+  expect(within(screen.getByTestId("portfolio-card-se0000000002")).getByText("Stopp 120 SEK (-20.00%)")).toHaveClass("change-negative");
   expect(screen.getByTestId("selected-portfolio-chart-panel")).toBeInTheDocument();
   expect(screen.getByText("Nuvarande värde:")).toBeInTheDocument();
   expect(screen.getByText("1 001 kr, 500 kr")).toBeInTheDocument();
   expect(screen.getByText("800 kr (+25.06%), 200 kr (+150.00%)")).toBeInTheDocument();
+  expect(within(screen.getByTestId("selected-portfolio-chart-panel")).getByText("Nu 150 SEK")).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: "Bildspel" }));
   const overlay = screen.getByTestId("slideshow-overlay");
@@ -328,6 +358,7 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
   expect(within(overlay).getByText("1 001 kr, 500 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("Inköpsvärde 1 000 kr (+50.05%)")).toBeInTheDocument();
   expect(within(overlay).getByText("800 kr (+25.06%), 200 kr (+150.00%)")).toBeInTheDocument();
+  expect(within(overlay).getByText("Mål 145 SEK (-3.33%)")).toHaveClass("change-positive");
 });
 
 test("sorts Mag7 table with sort controls", () => {

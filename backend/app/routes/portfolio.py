@@ -9,6 +9,7 @@ from app.core.settings import local_portfolio_enabled
 from app.models.portfolio import PortfolioSummaryResponse
 from app.routes.response_utils import age_seconds_since, to_stockholm_timestamp
 from app.services.portfolio_data import (
+    apply_portfolio_levels,
     build_portfolio_totals,
     enrich_holdings_with_market_data,
     fetch_portfolio_series,
@@ -18,6 +19,7 @@ from app.services.portfolio_data import (
     load_portfolio_holdings_from_ledger,
     portfolio_base_data_dir,
     portfolio_ledger_path,
+    portfolio_levels_path,
     portfolio_meta,
     update_portfolio_ledger_from_transactions,
 )
@@ -55,7 +57,9 @@ def portfolio_summary():
     ledger_update = update_portfolio_ledger_from_transactions(data_dir)
     refresh_files = latest_portfolio_refresh_files(data_dir)
     ledger_path = portfolio_ledger_path(data_dir)
+    levels_path = portfolio_levels_path(data_dir)
     cache_parts = [f"ledger:{ledger_path}:{ledger_path.stat().st_mtime_ns}" if ledger_path.exists() else "ledger:missing"]
+    cache_parts.append(f"levels:{levels_path}:{levels_path.stat().st_mtime_ns}" if levels_path.exists() else "levels:missing")
     cache_parts.extend(f"{owner_id}:{kind}:{source_file}:{source_file.stat().st_mtime_ns}" for owner_id, _, _, kind, source_file in refresh_files)
     cache_key = f"portfolio_summary:{'|'.join(cache_parts)}"
     cached = cache.get(cache_key)
@@ -74,7 +78,7 @@ def portfolio_summary():
 
     fetched_at = datetime.now(timezone.utc)
     base_holdings = load_portfolio_holdings_from_ledger(data_dir)
-    holdings = enrich_holdings_with_market_data(base_holdings, fund_cache_dir=data_dir)
+    holdings = apply_portfolio_levels(enrich_holdings_with_market_data(base_holdings, fund_cache_dir=data_dir), data_dir)
     totals = build_portfolio_totals(holdings)
     accounts = load_portfolio_accounts_from_ledger(data_dir)
     payload = PortfolioSummaryResponse(

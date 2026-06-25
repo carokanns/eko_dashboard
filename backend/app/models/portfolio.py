@@ -27,6 +27,20 @@ class PortfolioAccountValue(BaseModel):
     source_file: Optional[str] = None
 
 
+class PortfolioHoldingLevels(BaseModel):
+    target_price: Optional[float] = None
+    stop_price: Optional[float] = None
+    currency: Optional[str] = None
+    current_price: Optional[float] = None
+    target_distance: Optional[float] = None
+    target_distance_pct: Optional[float] = None
+    stop_distance: Optional[float] = None
+    stop_distance_pct: Optional[float] = None
+    match_source: str
+    source: str = "manual"
+    note: Optional[str] = None
+
+
 class PortfolioHolding(BaseModel):
     id: str
     name: str
@@ -57,6 +71,7 @@ class PortfolioHolding(BaseModel):
     valuation_fetched_at: Optional[datetime] = None
     valuation_is_stale: bool = False
     valuation_stale_reason: Optional[str] = None
+    levels: Optional[PortfolioHoldingLevels] = None
     sparkline: list[SparkPoint] = Field(default_factory=list)
     owners: list[PortfolioOwnerValue] = Field(default_factory=list)
 
