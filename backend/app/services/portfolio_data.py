@@ -564,8 +564,29 @@ def _clamp(value: float, lower: float, upper: float) -> float:
     return min(max(value, lower), upper)
 
 
+def _estimated_level_basis_price(holding: PortfolioHolding, current_price: float | None) -> float | None:
+    basis_price_sek = holding.acquisition_price_sek
+    if (basis_price_sek is None or basis_price_sek <= 0) and holding.acquisition_value is not None and holding.quantity:
+        basis_price_sek = holding.acquisition_value / holding.quantity
+    if basis_price_sek is None or basis_price_sek <= 0:
+        return None
+
+    currency = (holding.currency or "SEK").upper()
+    if currency == "SEK" or current_price is None or current_price <= 0 or not holding.quantity:
+        return _round(basis_price_sek, 6)
+
+    sek_per_unit = holding.current_value / (holding.quantity * current_price) if holding.current_value > 0 else None
+    if sek_per_unit is None or sek_per_unit <= 0:
+        return None
+    return _round(basis_price_sek / sek_per_unit, 6)
+
+
 def _estimated_portfolio_level(holding: PortfolioHolding, current_price: float | None) -> PortfolioLevel | None:
     if current_price is None or current_price <= 0:
+        return None
+
+    basis_price = _estimated_level_basis_price(holding, current_price)
+    if basis_price is None or basis_price <= 0:
         return None
 
     closes = [point.v for point in holding.sparkline if point.v > 0]
@@ -578,18 +599,13 @@ def _estimated_portfolio_level(holding: PortfolioHolding, current_price: float |
     stop_pct = _clamp(max(0.08, average_daily_move * 3.0), 0.06, 0.20)
     target_pct = _clamp(max(0.12, stop_pct * 1.6, average_daily_move * 5.0), 0.10, 0.35)
 
-    recent_low = min(closes) if closes else current_price
-    recent_high = max(closes) if closes else current_price
-    support_stop = recent_low * 0.98 if recent_low < current_price else current_price * (1.0 - stop_pct)
-    resistance_target = recent_high * 1.03 if recent_high > current_price else current_price * (1.0 + target_pct)
-
-    stop_price = _clamp(min(current_price * (1.0 - stop_pct), support_stop), current_price * 0.75, current_price * 0.96)
-    target_price = _clamp(max(current_price * (1.0 + target_pct), resistance_target), current_price * 1.05, current_price * 1.50)
+    stop_price = _clamp(basis_price * (1.0 - stop_pct), basis_price * 0.75, basis_price * 0.96)
+    target_price = _clamp(basis_price * (1.0 + target_pct), basis_price * 1.05, basis_price * 1.50)
     return {
         "target_price": _round(target_price),
         "stop_price": _round(stop_price),
         "currency": holding.currency,
-        "note": "Uppskattad fran kursrorelse: stopp ca 6-20% ned, mal minst 1,6x risken upp.",
+        "note": "Uppskattad fran inkopskurs: stopp ca 6-20% ned, mal minst 1,6x risken upp.",
     }
 
 

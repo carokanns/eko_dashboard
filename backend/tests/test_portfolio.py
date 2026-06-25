@@ -49,6 +49,7 @@ def _write_single_position(
     quantity="10",
     current_value="1500,50",
     acquisition_price="100,00",
+    currency="SEK",
     market="XSTO",
     instrument_type="STOCK",
 ):
@@ -56,7 +57,7 @@ def _write_single_position(
     data_dir.mkdir()
     (data_dir / "2026-06-11_positioner.csv").write_text(
         "\ufeffNamn;Kortnamn;Volym;Marknadsvärde;GAV (SEK);GAV;Valuta;Land;ISIN;Marknad;Typ\n"
-        f"{name};{short_name};{quantity};{current_value};{acquisition_price};{acquisition_price};SEK;SE;{isin};{market};{instrument_type}\n",
+        f"{name};{short_name};{quantity};{current_value};{acquisition_price};{acquisition_price};{currency};SE;{isin};{market};{instrument_type}\n",
         encoding="utf-8",
     )
     return data_dir
@@ -830,10 +831,47 @@ def test_portfolio_levels_estimate_stock_target_and_stop_when_no_manual_file(tmp
     assert holding.levels.source == "estimated"
     assert holding.levels.match_source == "estimated"
     assert holding.levels.current_price == 150.0
-    assert holding.levels.target_price is not None
-    assert holding.levels.target_price > 150.0
-    assert holding.levels.stop_price is not None
-    assert holding.levels.stop_price < 150.0
+    assert holding.levels.target_price == 114.02
+    assert holding.levels.target_distance == -35.98
+    assert holding.levels.target_distance_pct == -23.99
+    assert holding.levels.stop_price == 91.59
+    assert holding.levels.stop_distance == 58.41
+    assert holding.levels.stop_distance_pct == 38.94
+
+
+def test_portfolio_levels_estimate_foreign_stock_from_acquisition_price_in_instrument_currency(tmp_path, monkeypatch):
+    _write_single_position(
+        tmp_path,
+        "JP_avanza",
+        name="Uranium Energy Corp",
+        short_name="UEC",
+        isin="US9168961038",
+        quantity="10",
+        current_value="1064,00",
+        acquisition_price="90,00",
+        currency="USD",
+        market="XASE",
+    )
+    now = datetime.now(timezone.utc)
+
+    monkeypatch.setattr(
+        "app.services.portfolio_data.yahoo_finance.fetch_quotes_with_history",
+        lambda tickers, period: (
+            {
+                "UEC": QuoteSnapshot(timestamp=now, last=10.64, prev_close=10.5, history=[HistoryPoint(now, 10.64)]),
+                "USDSEK=X": QuoteSnapshot(timestamp=now, last=10.0, prev_close=10.0, history=[HistoryPoint(now, 10.0)]),
+            },
+            {},
+        ),
+    )
+
+    holding = apply_portfolio_levels(enrich_holdings_with_market_data(load_combined_portfolio_holdings(tmp_path)), tmp_path)[0]
+
+    assert holding.levels is not None
+    assert holding.levels.source == "estimated"
+    assert holding.levels.current_price == 10.64
+    assert holding.levels.target_price == 10.15
+    assert holding.levels.stop_price == 8.28
 
 
 def test_fund_nav_updates_combined_and_owner_values_without_changing_costs(tmp_path, monkeypatch):
