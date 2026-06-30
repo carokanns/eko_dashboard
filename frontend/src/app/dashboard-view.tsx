@@ -652,18 +652,19 @@ function SlideshowOverlay({
                         <h4 className="text-2xl font-semibold">{owner.owner_label}</h4>
                         <span className="badge">{owner.holding_count} innehav</span>
                       </div>
-                      <div className="mt-5 text-4xl font-semibold">{formatSek(owner.current_value)}</div>
-                      <div className={`mt-3 text-lg font-semibold ${changeToneClass(owner.gain_pct)}`}>
-                        Inköpsvärde {formatSek(owner.acquisition_value)} ({formatPercent(owner.gain_pct)})
+                      <div className="mt-5 text-4xl font-semibold">{formatSek(owner.total_with_bank)}</div>
+                      <div className="text-muted mt-2 text-base font-semibold">
+                        Varav Bankkonto {formatSek(owner.bank_value)}
                       </div>
-                      <div className="text-muted mt-3 text-base font-semibold">
-                        Bankkonto {formatSek(owner.bank_value)}
-                      </div>
-                      <div className="text-muted mt-1 text-sm font-semibold">
-                        Totalt inkl. bankkonto {formatSek(owner.total_with_bank)}
-                      </div>
-                      <div className={`mt-2 text-sm font-semibold ${changeToneClass(owner.gain_pct)}`}>
-                        Resultat {formatSek(owner.gain_abs)}
+                      <div className="text-muted mt-5 grid max-w-md grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-base font-semibold">
+                        <span>Nuvärde:</span>
+                        <span>{formatSek(owner.current_value)}</span>
+                        <span>Inköpsvärde:</span>
+                        <span>{formatSek(owner.acquisition_value)}</span>
+                        <span>Resultat:</span>
+                        <span className={changeToneClass(owner.gain_pct)}>
+                          {formatSek(owner.gain_abs)} ({formatPercent(owner.gain_pct)})
+                        </span>
                       </div>
                     </div>
                   ))}

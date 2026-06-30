@@ -349,10 +349,13 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
   expect(within(overlay).getByText("Inköpsvärde 1 200 kr (+45.88%)")).toBeInTheDocument();
   expect(within(overlay).getByText("Totalt innehav")).toBeInTheDocument();
   expect(within(overlay).getByText("4 985 kr")).toBeInTheDocument();
-  expect(within(overlay).getByText("Bankkonto 1 235 kr")).toBeInTheDocument();
-  expect(within(overlay).getByText("Bankkonto 2 000 kr")).toBeInTheDocument();
-  expect(within(overlay).getByText("Totalt inkl. bankkonto 2 485 kr")).toBeInTheDocument();
-  expect(within(overlay).getByText("Totalt inkl. bankkonto 2 500 kr")).toBeInTheDocument();
+  expect(within(overlay).getByText("Varav Bankkonto 1 235 kr")).toBeInTheDocument();
+  expect(within(overlay).getByText("Varav Bankkonto 2 000 kr")).toBeInTheDocument();
+  expect(within(overlay).getByText("2 485 kr")).toBeInTheDocument();
+  expect(within(overlay).getByText("2 500 kr")).toBeInTheDocument();
+  expect(within(overlay).getAllByText("Nuvärde:")).toHaveLength(2);
+  expect(within(overlay).getAllByText("Inköpsvärde:")).toHaveLength(2);
+  expect(within(overlay).getAllByText("Resultat:")).toHaveLength(2);
   fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
   expect(within(overlay).getByRole("heading", { name: "Exempelbolag B" })).toBeInTheDocument();
   expect(within(overlay).getByText("1 001 kr, 500 kr")).toBeInTheDocument();
