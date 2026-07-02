@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.models.summary import SparkPoint
 from app.providers.yahoo_finance import HistoryPoint, QuoteSnapshot
+from app.services.exchange_rates import ExchangeRate
 from app.services.portfolio_data import (
     apply_portfolio_levels,
     build_portfolio_totals,
@@ -1022,6 +1023,17 @@ def test_portfolio_summary_with_flag_and_local_file(client: TestClient, monkeypa
     monkeypatch.setenv("LOCAL_PORTFOLIO_BASE_DIR", str(tmp_path))
     monkeypatch.delenv("LOCAL_PORTFOLIO_DATA_DIR", raising=False)
     monkeypatch.setattr("app.routes.portfolio.enrich_holdings_with_market_data", fake_enrich)
+    monkeypatch.setattr(
+        "app.routes.portfolio.sek_to_thb_rate",
+        lambda: ExchangeRate(
+            base="SEK",
+            quote="THB",
+            rate=3.5,
+            fetched_at=now,
+            source="yahoo_finance",
+            ticker="THBSEK=X",
+        ),
+    )
 
     status = client.get("/api/portfolio/status")
     assert status.status_code == 200
@@ -1039,6 +1051,8 @@ def test_portfolio_summary_with_flag_and_local_file(client: TestClient, monkeypa
     assert payload["holdings"][0]["owners"][0]["owner_id"] == "jp"
     assert payload["accounts"][0]["owner_id"] == "jp"
     assert payload["accounts"][0]["bank_value"] == 1234.5
+    assert payload["meta"]["exchange_rates"]["sek_to_thb"]["rate"] == 3.5
+    assert payload["meta"]["exchange_rates"]["sek_to_thb"]["source"] == "yahoo_finance"
     assert any(item["kind"] == "transactions" for item in payload["meta"]["refresh_files"])
 
 

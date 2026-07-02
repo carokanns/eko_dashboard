@@ -131,6 +131,18 @@ export type PortfolioSummaryResponse = {
   meta: ApiMeta & {
     data_dir?: string;
     source_file?: string | null;
+    exchange_rates?: {
+      sek_to_thb?: {
+        base: string;
+        quote: string;
+        rate: number;
+        fetched_at: string;
+        source: string;
+        ticker: string;
+        is_fallback: boolean;
+        stale_reason?: string | null;
+      };
+    };
   };
 };
 

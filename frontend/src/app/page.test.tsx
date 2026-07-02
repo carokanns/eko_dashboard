@@ -244,7 +244,7 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
         ticker: null,
         chart_source: null,
         chart_label: null,
-        has_chart: false,
+        has_chart: true,
         last: null,
         day_abs: null,
         day_pct: null,
@@ -266,7 +266,10 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
           source: "estimated",
           note: null,
         },
-        sparkline: [],
+        sparkline: [
+          { t: "2026-02-06T10:00:00Z", v: 98 },
+          { t: "2026-02-07T10:00:00Z", v: 100 },
+        ],
         owners: [
           {
             owner_id: "jp",
@@ -286,7 +289,7 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
       gain_abs: 550.5,
       gain_pct: 45.88,
       holding_count: 2,
-      chart_count: 1,
+      chart_count: 2,
     },
     accounts: [
       {
@@ -310,6 +313,17 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
       source: "local_avanza_export",
       cached: false,
       fetched_at: "2026-02-07T10:00:00Z",
+      exchange_rates: {
+        sek_to_thb: {
+          base: "SEK",
+          quote: "THB",
+          rate: 3.5,
+          fetched_at: "2026-02-07T10:00:00Z",
+          source: "yahoo_finance",
+          ticker: "THBSEK=X",
+          is_fallback: false,
+        },
+      },
     },
   };
 
@@ -349,6 +363,7 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
   expect(within(overlay).getByText("Inköpsvärde 1 200 kr (+45.88%)")).toBeInTheDocument();
   expect(within(overlay).getByText("Totalt innehav")).toBeInTheDocument();
   expect(within(overlay).getByText("4 985 kr")).toBeInTheDocument();
+  expect(within(overlay).getByText("17 448 THB")).toBeInTheDocument();
   expect(within(overlay).getByText("Varav Bankkonto 1 235 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("Varav Bankkonto 2 000 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("2 485 kr")).toBeInTheDocument();
@@ -362,6 +377,11 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
   expect(within(overlay).getByText("Inköpsvärde 1 000 kr (+50.05%)")).toBeInTheDocument();
   expect(within(overlay).getByText("800 kr (+25.06%), 200 kr (+150.00%)")).toBeInTheDocument();
   expect(within(overlay).getByText("Mål 145 SEK (-3.33%)")).toHaveClass("change-positive");
+  fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
+  expect(within(overlay).getByRole("heading", { name: "Exempelfond" })).toBeInTheDocument();
+  expect(within(overlay).getByText("JP")).toBeInTheDocument();
+  expect(within(overlay).getAllByText("250 kr")).toHaveLength(1);
+  expect(within(overlay).queryByText("200 kr (+25.00%)")).not.toBeInTheDocument();
 });
 
 test("sorts Mag7 table with sort controls", () => {

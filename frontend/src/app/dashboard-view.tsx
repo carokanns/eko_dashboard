@@ -53,6 +53,7 @@ type SlideshowSlide =
       type: "portfolio-summary";
       group: "Min Avanza";
       totals: PortfolioSummaryResponse["totals"];
+      sekToThbRate: number;
       owners: PortfolioOwnerSummary[];
     }
   | {
@@ -83,6 +84,7 @@ const EMPTY_ITEMS: SummaryItem[] = [];
 const EMPTY_PORTFOLIO_ITEMS: PortfolioHolding[] = [];
 const SLIDESHOW_LOG_KEY = "dashboard-slideshow-log";
 const SLIDESHOW_LOG_LIMIT = 2000;
+const DEFAULT_SEK_TO_THB_RATE = 3.43;
 
 type BrowserMemoryInfo = {
   usedJSHeapSize?: number;
@@ -160,6 +162,18 @@ function formatSek(value: number | null, precision = 0): string {
   })} kr`;
 }
 
+function formatThb(value: number | null): string {
+  if (value === null) return "--";
+  return `${value.toLocaleString("sv-SE", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })} THB`;
+}
+
+function portfolioTotalWithBank(owners: PortfolioOwnerSummary[]): number {
+  return owners.reduce((sum, owner) => sum + owner.total_with_bank, 0);
+}
+
 function formatPercent(value: number | null): string {
   if (value === null) return "--";
   const sign = value > 0 ? "+" : "";
@@ -188,7 +202,7 @@ function formatAbsAndPercent(dayAbs: number | null, dayPct: number | null): stri
   return `${formatSignedValue(dayAbs)} (${formatPercent(dayPct)})`;
 }
 
-function PortfolioLevelsLine({ holding, compact = false }: { holding: PortfolioHolding; compact?: boolean }) {
+function PortfolioLevelsLine({ holding, compact = false, align = "left" }: { holding: PortfolioHolding; compact?: boolean; align?: "left" | "right" }) {
   const levels = holding.levels;
   if (!levels) return null;
   const currency = levels.currency ?? holding.currency;
@@ -196,7 +210,7 @@ function PortfolioLevelsLine({ holding, compact = false }: { holding: PortfolioH
   const targetReached = levels.current_price !== null && levels.target_price !== null && levels.current_price >= levels.target_price;
   const stopReached = levels.current_price !== null && levels.stop_price !== null && levels.current_price <= levels.stop_price;
   return (
-    <div className={`text-muted flex flex-wrap gap-x-3 gap-y-1 ${compact ? "mt-3 text-xs" : "mt-2 text-sm"}`}>
+    <div className={`text-muted flex flex-wrap gap-x-3 gap-y-1 ${align === "right" ? "justify-end text-right" : ""} ${compact ? "mt-3 text-xs" : "mt-2 text-sm"}`}>
       {prefix ? <span>{prefix}</span> : null}
       <span>Nu {formatLevelPrice(levels.current_price, currency)}</span>
       {levels.target_price !== null ? (
@@ -225,6 +239,11 @@ function formatOwnerAcquisitionValues(holding: PortfolioHolding): string {
   return holding.owners
     .map((owner) => `${formatSek(owner.acquisition_value)} (${formatPercent(owner.gain_pct)})`)
     .join(", ");
+}
+
+function formatSlideshowOwnerLine(holding: PortfolioHolding): string | null {
+  if (holding.owners.length !== 1) return null;
+  return holding.owners[0]?.owner_label ?? null;
 }
 
 function buildPortfolioOwnerSummaries(items: PortfolioHolding[], accounts: PortfolioAccountValue[]): PortfolioOwnerSummary[] {
@@ -635,7 +654,8 @@ function SlideshowOverlay({
                   </div>
                   <div className="slideshow-value-block">
                     <div className="kpi-subtle">Totalt inklusive bankkonto</div>
-                    <div className="slideshow-value slideshow-total-value">{formatSek(activeSlide.owners.reduce((sum, owner) => sum + owner.total_with_bank, 0))}</div>
+                    <div className="slideshow-value slideshow-total-value">{formatSek(portfolioTotalWithBank(activeSlide.owners))}</div>
+                    <div className="slideshow-total-subvalue">{formatThb(portfolioTotalWithBank(activeSlide.owners) * activeSlide.sekToThbRate)}</div>
                   </div>
                 </div>
                 <div className="mt-8 text-center">
@@ -685,17 +705,21 @@ function SlideshowOverlay({
                     <div className={`text-lg font-semibold ${changeToneClass(activeSlide.holding.gain_pct)}`}>
                       Inköpsvärde {formatSek(activeSlide.holding.acquisition_value)} ({formatPercent(activeSlide.holding.gain_pct)})
                     </div>
-                    {activeSlide.holding.owners.length ? (
+                    {formatSlideshowOwnerLine(activeSlide.holding) ? (
+                      <div className="text-muted text-base font-semibold">
+                        {formatSlideshowOwnerLine(activeSlide.holding)}
+                      </div>
+                    ) : activeSlide.holding.owners.length ? (
                       <div className="text-muted text-base font-semibold">
                         {formatOwnerSekValues(activeSlide.holding, "current_value")}
                       </div>
                     ) : null}
-                    {activeSlide.holding.owners.length ? (
+                    {activeSlide.holding.owners.length > 1 ? (
                       <div className="text-muted text-sm">
                         {formatOwnerAcquisitionValues(activeSlide.holding)}
                       </div>
                     ) : null}
-                    <PortfolioLevelsLine holding={activeSlide.holding} />
+                    <PortfolioLevelsLine holding={activeSlide.holding} align="right" />
                   </div>
                 </div>
                 <Sparkline points={activeSlide.holding.sparkline} heightClass="h-[55vh]" showXAxis />
@@ -885,8 +909,9 @@ export function DashboardView({
   const tableGridClass = showMag7Table ? "grid-cols-7" : "grid-cols-8";
   const selectedMarketChart = kpiItems.find((item) => item.id === selectedMarketChartId) ?? kpiItems[0] ?? null;
   const selectedPortfolioHolding = filteredPortfolioItems.find((item) => item.id === selectedMarketChartId) ?? filteredPortfolioItems[0] ?? null;
-  const portfolioAccounts = portfolio?.accounts ?? [];
+  const portfolioAccounts = useMemo(() => portfolio?.accounts ?? [], [portfolio?.accounts]);
   const portfolioOwnerSummaries = useMemo(() => buildPortfolioOwnerSummaries(filteredPortfolioItems, portfolioAccounts), [filteredPortfolioItems, portfolioAccounts]);
+  const sekToThbRate = portfolio?.meta.exchange_rates?.sek_to_thb?.rate ?? DEFAULT_SEK_TO_THB_RATE;
   const slideshowSlides: SlideshowSlide[] = useMemo(
     () => [
       ...filteredCommodityItems.map((item) => ({
@@ -914,6 +939,7 @@ export function DashboardView({
               type: "portfolio-summary" as const,
               group: "Min Avanza" as const,
               totals: portfolio.totals,
+              sekToThbRate,
               owners: portfolioOwnerSummaries,
             },
           ]
@@ -941,7 +967,7 @@ export function DashboardView({
           ]
         : []),
     ],
-    [filteredCommodityItems, filteredIndexItems, filteredMag7Items, filteredPortfolioItems, portfolio, portfolioOwnerSummaries, swedenInflationItem, swedenInflationPoints, usaInflationItem, usaInflationPoints],
+    [filteredCommodityItems, filteredIndexItems, filteredMag7Items, filteredPortfolioItems, portfolio, portfolioOwnerSummaries, sekToThbRate, swedenInflationItem, swedenInflationPoints, usaInflationItem, usaInflationPoints],
   );
   const safeSlideshowIndex = slideshowSlides.length > 0 ? Math.min(slideshowIndex, slideshowSlides.length - 1) : 0;
   const activeSlideshowSlide = slideshowSlides[safeSlideshowIndex] ?? null;

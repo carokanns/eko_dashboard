@@ -16,12 +16,14 @@ from app.routes.indexes import router as indexes_router
 from app.routes.inflation import router as inflation_router
 from app.routes.mag7 import router as mag7_router
 from app.routes.portfolio import router as portfolio_router
+from app.services.exchange_rates import refresh_startup_exchange_rates
 from app.services.portfolio_data import update_portfolio_ledger_from_transactions
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     upgrade_to_head()
+    refresh_startup_exchange_rates()
     if local_portfolio_enabled():
         update_portfolio_ledger_from_transactions()
     await scheduler.start()

@@ -394,6 +394,15 @@ body {
   white-space: nowrap;
 }
 
+.slideshow-total-subvalue {
+  color: var(--muted);
+  font-size: clamp(18px, 2vw, 28px);
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 8px;
+  white-space: nowrap;
+}
+
 .change-positive {
   color: var(--positive);
 }

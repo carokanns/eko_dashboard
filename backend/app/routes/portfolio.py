@@ -8,6 +8,7 @@ from app.core.cache import cache
 from app.core.settings import local_portfolio_enabled
 from app.models.portfolio import PortfolioSummaryResponse
 from app.routes.response_utils import age_seconds_since, to_stockholm_timestamp
+from app.services.exchange_rates import sek_to_thb_rate
 from app.services.portfolio_data import (
     apply_portfolio_levels,
     build_portfolio_totals,
@@ -81,6 +82,7 @@ def portfolio_summary():
     holdings = apply_portfolio_levels(enrich_holdings_with_market_data(base_holdings, fund_cache_dir=data_dir), data_dir)
     totals = build_portfolio_totals(holdings)
     accounts = load_portfolio_accounts_from_ledger(data_dir)
+    sek_to_thb = sek_to_thb_rate()
     payload = PortfolioSummaryResponse(
         enabled=True,
         holdings=holdings,
@@ -96,6 +98,18 @@ def portfolio_summary():
             ),
             "ledger_file": str(ledger_path),
             "ledger_applied_transactions": ledger_update["applied_count"],
+            "exchange_rates": {
+                "sek_to_thb": {
+                    "base": sek_to_thb.base,
+                    "quote": sek_to_thb.quote,
+                    "rate": sek_to_thb.rate,
+                    "fetched_at": to_stockholm_timestamp(sek_to_thb.fetched_at),
+                    "source": sek_to_thb.source,
+                    "ticker": sek_to_thb.ticker,
+                    "is_fallback": sek_to_thb.is_fallback,
+                    "stale_reason": sek_to_thb.stale_reason,
+                }
+            },
             "age_seconds": age_seconds_since(fetched_at),
         },
     )
