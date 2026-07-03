@@ -319,8 +319,8 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
           quote: "THB",
           rate: 3.5,
           fetched_at: "2026-02-07T10:00:00Z",
-          source: "yahoo_finance",
-          ticker: "THBSEK=X",
+          source: "frankfurter",
+          ticker: "SEKTHB",
           is_fallback: false,
         },
       },
@@ -364,6 +364,7 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
   expect(within(overlay).getByText("Totalt innehav")).toBeInTheDocument();
   expect(within(overlay).getByText("4 985 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("17 448 THB")).toBeInTheDocument();
+  expect(within(overlay).getByText("1 SEK = 3,50 THB")).toBeInTheDocument();
   expect(within(overlay).getByText("Varav Bankkonto 1 235 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("Varav Bankkonto 2 000 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("2 485 kr")).toBeInTheDocument();

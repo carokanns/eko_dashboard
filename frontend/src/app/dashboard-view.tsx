@@ -170,6 +170,13 @@ function formatThb(value: number | null): string {
   })} THB`;
 }
 
+function formatSekToThbRate(value: number): string {
+  return `1 SEK = ${value.toLocaleString("sv-SE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} THB`;
+}
+
 function portfolioTotalWithBank(owners: PortfolioOwnerSummary[]): number {
   return owners.reduce((sum, owner) => sum + owner.total_with_bank, 0);
 }
@@ -656,6 +663,7 @@ function SlideshowOverlay({
                     <div className="kpi-subtle">Totalt inklusive bankkonto</div>
                     <div className="slideshow-value slideshow-total-value">{formatSek(portfolioTotalWithBank(activeSlide.owners))}</div>
                     <div className="slideshow-total-subvalue">{formatThb(portfolioTotalWithBank(activeSlide.owners) * activeSlide.sekToThbRate)}</div>
+                    <div className="slideshow-total-rate">{formatSekToThbRate(activeSlide.sekToThbRate)}</div>
                   </div>
                 </div>
                 <div className="mt-8 text-center">

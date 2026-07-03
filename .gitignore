@@ -50,6 +50,7 @@ coverage/
 .cache/
 
 # Local database artifacts (SQLite)
+backend/data/
 *.sqlite
 *.sqlite3
 *.db

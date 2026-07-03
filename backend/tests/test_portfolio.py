@@ -1030,8 +1030,8 @@ def test_portfolio_summary_with_flag_and_local_file(client: TestClient, monkeypa
             quote="THB",
             rate=3.5,
             fetched_at=now,
-            source="yahoo_finance",
-            ticker="THBSEK=X",
+            source="frankfurter",
+            ticker="SEKTHB",
         ),
     )
 
@@ -1052,7 +1052,7 @@ def test_portfolio_summary_with_flag_and_local_file(client: TestClient, monkeypa
     assert payload["accounts"][0]["owner_id"] == "jp"
     assert payload["accounts"][0]["bank_value"] == 1234.5
     assert payload["meta"]["exchange_rates"]["sek_to_thb"]["rate"] == 3.5
-    assert payload["meta"]["exchange_rates"]["sek_to_thb"]["source"] == "yahoo_finance"
+    assert payload["meta"]["exchange_rates"]["sek_to_thb"]["source"] == "frankfurter"
     assert any(item["kind"] == "transactions" for item in payload["meta"]["refresh_files"])
 
 
