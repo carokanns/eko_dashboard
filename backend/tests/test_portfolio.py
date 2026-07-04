@@ -545,6 +545,61 @@ def test_ledger_baselines_history_when_a_new_full_transaction_export_arrives(tmp
     assert holding.acquisition_value == 1200
 
 
+def test_ledger_skips_unknown_overlap_rows_before_previous_checkpoint(tmp_path):
+    data_dir = _write_single_position(tmp_path, "JP_avanza", quantity="10", current_value="1500,00", acquisition_price="100,00")
+    _write_transactions(
+        data_dir,
+        rows=[
+            "2026-06-12;Bas ISK;Köp;Exempelbolag B;2;100;-200;SEK;;;SEK;SE0000000001;",
+        ],
+    )
+    first = update_portfolio_ledger_from_transactions(tmp_path)
+
+    _write_ods(
+        data_dir / "transaktioner_2026-01-01_2026-06-18.ods",
+        [
+            {
+                "Datum": "2026-06-12",
+                "Konto": "Bas ISK",
+                "Typ av transaktion": "Köp",
+                "Värdepapper/beskrivning": "Exempelbolag B",
+                "Antal": "2",
+                "Kurs": "100",
+                "Belopp": "200",
+                "Transaktionsvaluta": "-200",
+                "Courtage": "SEK",
+                "Valutakurs": "",
+                "Instrumentvaluta": "SEK",
+                "ISIN": "SE0000000001",
+                "Resultat": "",
+            },
+            {
+                "Datum": "2026-06-13",
+                "Konto": "Bas ISK",
+                "Typ av transaktion": "Köp",
+                "Värdepapper/beskrivning": "Exempelbolag B",
+                "Antal": "1",
+                "Kurs": "100",
+                "Belopp": "-100",
+                "Transaktionsvaluta": "SEK",
+                "Courtage": "",
+                "Valutakurs": "",
+                "Instrumentvaluta": "SEK",
+                "ISIN": "SE0000000001",
+                "Resultat": "",
+            },
+        ],
+    )
+
+    second = update_portfolio_ledger_from_transactions(tmp_path)
+    holding = load_portfolio_holdings_from_ledger(tmp_path)[0]
+
+    assert first["applied_count"] == 1
+    assert second["applied_count"] == 1
+    assert holding.quantity == 13
+    assert holding.acquisition_value == 1300
+
+
 def test_ledger_tracks_latest_transaction_export_checkpoint(tmp_path):
     data_dir = _write_single_position(tmp_path, "JP_avanza")
     _write_transactions(

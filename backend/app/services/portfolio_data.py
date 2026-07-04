@@ -1331,6 +1331,7 @@ def update_portfolio_ledger_from_transactions(base_dir: Path | None = None) -> d
         rows = _read_transaction_rows(source_file)
         latest_transaction_date = max((row.get("Datum") or "" for _row_hash, row in rows), default="") or None
         checkpoint = owner.setdefault("transaction_checkpoint", {})
+        previous_checkpoint_date = checkpoint.get("latest_transaction_date")
         checkpoint_changed = (
             checkpoint.get("source_file") != source_file.name
             or checkpoint.get("latest_transaction_date") != latest_transaction_date
@@ -1346,6 +1347,16 @@ def update_portfolio_ledger_from_transactions(base_dir: Path | None = None) -> d
             ledger_changed = True
         new_rows = [(row_hash, row, index) for index, (row_hash, row) in enumerate(rows) if row_hash not in processed]
         for row_hash, row, _index in sorted(new_rows, key=lambda item: _transaction_sort_key(item[1], item[2])):
+            if previous_checkpoint_date and (row.get("Datum") or "") <= previous_checkpoint_date:
+                processed[row_hash] = {
+                    "source_file": source_file.name,
+                    "date": row.get("Datum"),
+                    "type": row.get("Typ av transaktion"),
+                    "baseline": True,
+                    "baseline_reason": "before_transaction_checkpoint",
+                }
+                ledger_changed = True
+                continue
             if baseline_through is not None and (row.get("Datum") or "") <= baseline_through:
                 processed[row_hash] = {
                     "source_file": source_file.name,
