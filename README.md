@@ -177,3 +177,10 @@ Snabb verifiering:
 2. LAN: öppna `http://<laptop-lan-ip>:3000` på mobil/tablet i samma Wi-Fi.
 3. Internet: stäng av Wi-Fi på mobilen och öppna Tailscale-URL.
 4. Bekräfta att `http://<laptop-ip>:8000` inte är nåbar från andra enheter.
+
+Lokal Avanza-import:
+
+- Exportera transaktioner direkt som CSV från Avanza och lägg filerna i `local-data/JP_avanza/` respektive `local-data/Pat_avanza/`.
+- Det är bra om exporten överlappar tidigare importer; en års-export är normalt lagom. Importen använder checkpoint per ägare och ignorerar okända överlappsrader som ligger på eller före senaste importerade transaktionsdatum.
+- Undvik att ha både CSV och ODS för samma transaktionsperiod i samma ägarmapp. Om båda finns prioriteras ODS, vilket kan ge andra radvärden än original-CSV.
+- Position- och kontofiler kan fortfarande användas som startläge, men den löpande utvecklingen av innehav bör komma från transaktionsfilerna.

@@ -596,6 +596,11 @@ def test_ledger_skips_unknown_overlap_rows_before_previous_checkpoint(tmp_path):
 
     assert first["applied_count"] == 1
     assert second["applied_count"] == 1
+    assert second["owners"][0]["row_count"] == 2
+    assert second["owners"][0]["new_count"] == 2
+    assert second["owners"][0]["overlap_count"] == 1
+    assert second["owners"][0]["checkpoint"]["previous_latest_transaction_date"] == "2026-06-12"
+    assert second["owners"][0]["checkpoint"]["latest_transaction_date"] == "2026-06-13"
     assert holding.quantity == 13
     assert holding.acquisition_value == 1300
 
@@ -1108,6 +1113,8 @@ def test_portfolio_summary_with_flag_and_local_file(client: TestClient, monkeypa
     assert payload["accounts"][0]["bank_value"] == 1234.5
     assert payload["meta"]["exchange_rates"]["sek_to_thb"]["rate"] == 3.5
     assert payload["meta"]["exchange_rates"]["sek_to_thb"]["source"] == "frankfurter"
+    assert payload["meta"]["ledger_import"]["applied_count"] == 0
+    assert payload["meta"]["ledger_import"]["owners"][0]["source_file"] == "transaktioner_2026-01-01_2026-06-17.csv"
     assert any(item["kind"] == "transactions" for item in payload["meta"]["refresh_files"])
 
 

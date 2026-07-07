@@ -1322,16 +1322,21 @@ def update_portfolio_ledger_from_transactions(base_dir: Path | None = None) -> d
     ledger_changed = _backfill_ledger_ticker_mappings(root, ledger) or ledger_changed
     ledger_changed = _unbaseline_transactions_after_position_snapshot(ledger) or ledger_changed
     applied: list[dict[str, Any]] = []
+    owners_status: list[dict[str, Any]] = []
     for owner_id, owner_label, data_dir, source_file in latest_portfolio_transaction_files(root):
         owner = ledger.setdefault("owners", {}).setdefault(owner_id, _empty_ledger_owner(owner_id, owner_label))
         owner["owner_label"] = owner_label
         processed = owner.setdefault("processed_transactions", {})
+        processed_before = len(processed)
         position_file = ledger.get("seed", {}).get("owners", {}).get(owner_id, {}).get("position_file")
         baseline_through = _snapshot_date(Path(str(position_file))) if position_file else None
         rows = _read_transaction_rows(source_file)
         latest_transaction_date = max((row.get("Datum") or "" for _row_hash, row in rows), default="") or None
         checkpoint = owner.setdefault("transaction_checkpoint", {})
         previous_checkpoint_date = checkpoint.get("latest_transaction_date")
+        owner_applied: list[dict[str, Any]] = []
+        baseline_count = 0
+        overlap_count = 0
         checkpoint_changed = (
             checkpoint.get("source_file") != source_file.name
             or checkpoint.get("latest_transaction_date") != latest_transaction_date
@@ -1348,6 +1353,7 @@ def update_portfolio_ledger_from_transactions(base_dir: Path | None = None) -> d
         new_rows = [(row_hash, row, index) for index, (row_hash, row) in enumerate(rows) if row_hash not in processed]
         for row_hash, row, _index in sorted(new_rows, key=lambda item: _transaction_sort_key(item[1], item[2])):
             if previous_checkpoint_date and (row.get("Datum") or "") <= previous_checkpoint_date:
+                overlap_count += 1
                 processed[row_hash] = {
                     "source_file": source_file.name,
                     "date": row.get("Datum"),
@@ -1358,6 +1364,7 @@ def update_portfolio_ledger_from_transactions(base_dir: Path | None = None) -> d
                 ledger_changed = True
                 continue
             if baseline_through is not None and (row.get("Datum") or "") <= baseline_through:
+                baseline_count += 1
                 processed[row_hash] = {
                     "source_file": source_file.name,
                     "date": row.get("Datum"),
@@ -1372,16 +1379,47 @@ def update_portfolio_ledger_from_transactions(base_dir: Path | None = None) -> d
                 "type": row.get("Typ av transaktion"),
                 "baseline": False,
             }
-            applied.append({"owner_id": owner_id, "date": row.get("Datum"), "type": row.get("Typ av transaktion")})
+            applied_row = {"owner_id": owner_id, "date": row.get("Datum"), "type": row.get("Typ av transaktion")}
+            owner_applied.append(applied_row)
+            applied.append(applied_row)
+        owners_status.append(
+            {
+                "owner_id": owner_id,
+                "owner_label": owner_label,
+                "source_file": source_file.name,
+                "row_count": len(rows),
+                "processed_before": processed_before,
+                "processed_after": len(processed),
+                "new_count": len(new_rows),
+                "applied_count": len(owner_applied),
+                "baseline_count": baseline_count,
+                "overlap_count": overlap_count,
+                "checkpoint": {
+                    "source_file": checkpoint.get("source_file"),
+                    "latest_transaction_date": checkpoint.get("latest_transaction_date"),
+                    "previous_latest_transaction_date": previous_checkpoint_date,
+                    "updated_at": checkpoint.get("updated_at"),
+                },
+            }
+        )
     if applied or ledger_changed:
         _save_portfolio_ledger(root, ledger)
-    return {"applied_count": len(applied), "applied": applied, "ledger_path": str(portfolio_ledger_path(root))}
+    return {
+        "applied_count": len(applied),
+        "applied": applied,
+        "ledger_path": str(portfolio_ledger_path(root)),
+        "owners": owners_status,
+    }
 
 
 def load_portfolio_holdings_from_ledger(base_dir: Path | None = None) -> list[PortfolioHolding]:
     root = base_dir or portfolio_base_data_dir()
     update_portfolio_ledger_from_transactions(root)
     ledger = _load_portfolio_ledger(root)
+    return _holdings_from_ledger_payload(ledger)
+
+
+def _holdings_from_ledger_payload(ledger: dict[str, Any]) -> list[PortfolioHolding]:
     owner_holdings: list[tuple[str, str, PortfolioHolding]] = []
     for owner_id, owner in ledger.get("owners", {}).items():
         owner_label = owner.get("owner_label") or owner_id
@@ -1396,8 +1434,12 @@ def load_portfolio_accounts_from_ledger(base_dir: Path | None = None) -> list[Po
     root = base_dir or portfolio_base_data_dir()
     update_portfolio_ledger_from_transactions(root)
     ledger = _load_portfolio_ledger(root)
+    return _accounts_from_ledger_payload(root, ledger)
+
+
+def _accounts_from_ledger_payload(base_dir: Path, ledger: dict[str, Any]) -> list[PortfolioAccountValue]:
     accounts: list[PortfolioAccountValue] = []
-    for owner_meta in portfolio_owner_dirs(root):
+    for owner_meta in portfolio_owner_dirs(base_dir):
         owner_id = owner_meta["owner_id"]
         owner = ledger.get("owners", {}).get(owner_id, _empty_ledger_owner(owner_id, owner_meta["owner_label"]))
         accounts.append(
@@ -1411,6 +1453,13 @@ def load_portfolio_accounts_from_ledger(base_dir: Path | None = None) -> list[Po
             )
         )
     return accounts
+
+
+def load_portfolio_views_from_ledger(base_dir: Path | None = None) -> tuple[list[PortfolioHolding], list[PortfolioAccountValue], dict[str, Any]]:
+    root = base_dir or portfolio_base_data_dir()
+    ledger_update = update_portfolio_ledger_from_transactions(root)
+    ledger = _load_portfolio_ledger(root)
+    return _holdings_from_ledger_payload(ledger), _accounts_from_ledger_payload(root, ledger), ledger_update
 
 
 def build_portfolio_totals(holdings: list[PortfolioHolding]) -> PortfolioTotals:

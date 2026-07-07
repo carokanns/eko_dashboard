@@ -131,6 +131,31 @@ export type PortfolioSummaryResponse = {
   meta: ApiMeta & {
     data_dir?: string;
     source_file?: string | null;
+    ledger_file?: string;
+    ledger_applied_transactions?: number;
+    ledger_import?: {
+      applied_count: number;
+      applied: Array<{ owner_id: string; date: string | null; type: string | null }>;
+      ledger_path: string;
+      owners: Array<{
+        owner_id: string;
+        owner_label: string;
+        source_file: string;
+        row_count: number;
+        processed_before: number;
+        processed_after: number;
+        new_count: number;
+        applied_count: number;
+        baseline_count: number;
+        overlap_count: number;
+        checkpoint: {
+          source_file: string | null;
+          latest_transaction_date: string | null;
+          previous_latest_transaction_date: string | null;
+          updated_at: string | null;
+        };
+      }>;
+    };
     exchange_rates?: {
       sek_to_thb?: {
         base: string;

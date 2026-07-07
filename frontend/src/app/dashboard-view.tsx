@@ -3,6 +3,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { MarketRange, PortfolioAccountValue, PortfolioHolding, PortfolioSummaryResponse, SparkPoint, SummaryItem, SummaryResponse } from "@/lib/api";
+import {
+  changeToneClass,
+  formatAbsAndPercent,
+  formatLevelPrice,
+  formatPercent,
+  formatSek,
+  formatSekToThbRate,
+  formatThb,
+  formatTimestampCell,
+  formatUpdateTime,
+  formatValue,
+  sourceDisplayName,
+} from "./dashboard-format";
 
 const tabs = [
   { id: "commodities", label: "Råvaror" },
@@ -149,64 +162,8 @@ function exportSlideshowLog() {
   URL.revokeObjectURL(link.href);
 }
 
-function formatValue(value: number | null, precision = 2): string {
-  if (value === null) return "--";
-  return value.toFixed(precision);
-}
-
-function formatSek(value: number | null, precision = 0): string {
-  if (value === null) return "--";
-  return `${value.toLocaleString("sv-SE", {
-    minimumFractionDigits: precision,
-    maximumFractionDigits: precision,
-  })} kr`;
-}
-
-function formatThb(value: number | null): string {
-  if (value === null) return "--";
-  return `${value.toLocaleString("sv-SE", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  })} THB`;
-}
-
-function formatSekToThbRate(value: number): string {
-  return `1 SEK = ${value.toLocaleString("sv-SE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })} THB`;
-}
-
 function portfolioTotalWithBank(owners: PortfolioOwnerSummary[]): number {
   return owners.reduce((sum, owner) => sum + owner.total_with_bank, 0);
-}
-
-function formatPercent(value: number | null): string {
-  if (value === null) return "--";
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${value.toFixed(2)}%`;
-}
-
-function formatSignedValue(value: number | null, precision = 2): string {
-  if (value === null) return "--";
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${value.toFixed(precision)}`;
-}
-
-function formatLevelPrice(value: number | null, currency: string | null | undefined): string {
-  if (value === null) return "--";
-  const formatted = value.toLocaleString("sv-SE", {
-    minimumFractionDigits: value >= 100 ? 0 : 2,
-    maximumFractionDigits: value >= 100 ? 0 : 2,
-  });
-  return currency ? `${formatted} ${currency}` : formatted;
-}
-
-function formatAbsAndPercent(dayAbs: number | null, dayPct: number | null): string {
-  if (dayAbs === null && dayPct === null) return "--";
-  if (dayAbs === null) return formatPercent(dayPct);
-  if (dayPct === null) return formatSignedValue(dayAbs);
-  return `${formatSignedValue(dayAbs)} (${formatPercent(dayPct)})`;
 }
 
 function PortfolioLevelsLine({ holding, compact = false, align = "left" }: { holding: PortfolioHolding; compact?: boolean; align?: "left" | "right" }) {
@@ -304,27 +261,6 @@ function buildPortfolioOwnerSummaries(items: PortfolioHolding[], accounts: Portf
       gain_pct: owner.acquisition_value ? (owner.gain_abs / owner.acquisition_value) * 100 : null,
     }))
     .sort((a, b) => (ownerOrder[a.owner_id] ?? 99) - (ownerOrder[b.owner_id] ?? 99));
-}
-
-function changeToneClass(value: number | null): string {
-  if (value === null) return "change-neutral";
-  if (value > 0) return "change-positive";
-  if (value < 0) return "change-negative";
-  return "change-neutral";
-}
-
-function formatUpdateTime(timestamp: string | undefined): string {
-  if (!timestamp) return "--:--";
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.valueOf())) return "--:--";
-  return date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
-}
-
-function formatTimestampCell(timestamp: string | null | undefined): string {
-  if (!timestamp) return "--";
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.valueOf())) return "--";
-  return date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
 }
 
 function getModuleStatus(items: Array<{ is_stale: boolean }>): ModuleStatus {
@@ -775,13 +711,6 @@ function SlideshowOverlay({
       </div>
     </div>
   );
-}
-
-function sourceDisplayName(source: string): string {
-  if (source === "yahoo_finance") return "Yahoo";
-  if (source === "fred") return "FRED";
-  if (source === "local_avanza_export") return "Avanza CSV";
-  return source;
 }
 
 function resolvePreferredTheme(): Theme {

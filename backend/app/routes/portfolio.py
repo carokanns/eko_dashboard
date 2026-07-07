@@ -16,13 +16,12 @@ from app.services.portfolio_data import (
     fetch_portfolio_series,
     latest_portfolio_source_files,
     latest_portfolio_refresh_files,
-    load_portfolio_accounts_from_ledger,
     load_portfolio_holdings_from_ledger,
+    load_portfolio_views_from_ledger,
     portfolio_base_data_dir,
     portfolio_ledger_path,
     portfolio_levels_path,
     portfolio_meta,
-    update_portfolio_ledger_from_transactions,
 )
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
@@ -55,7 +54,7 @@ def portfolio_summary():
     if not source_files and not has_ledger:
         raise HTTPException(status_code=404, detail="No local Avanza position export found.")
 
-    ledger_update = update_portfolio_ledger_from_transactions(data_dir)
+    base_holdings, accounts, ledger_update = load_portfolio_views_from_ledger(data_dir)
     refresh_files = latest_portfolio_refresh_files(data_dir)
     ledger_path = portfolio_ledger_path(data_dir)
     levels_path = portfolio_levels_path(data_dir)
@@ -78,10 +77,8 @@ def portfolio_summary():
         )
 
     fetched_at = datetime.now(timezone.utc)
-    base_holdings = load_portfolio_holdings_from_ledger(data_dir)
     holdings = apply_portfolio_levels(enrich_holdings_with_market_data(base_holdings, fund_cache_dir=data_dir), data_dir)
     totals = build_portfolio_totals(holdings)
-    accounts = load_portfolio_accounts_from_ledger(data_dir)
     sek_to_thb = sek_to_thb_rate()
     payload = PortfolioSummaryResponse(
         enabled=True,
@@ -98,6 +95,7 @@ def portfolio_summary():
             ),
             "ledger_file": str(ledger_path),
             "ledger_applied_transactions": ledger_update["applied_count"],
+            "ledger_import": ledger_update,
             "exchange_rates": {
                 "sek_to_thb": {
                     "base": sek_to_thb.base,
