@@ -21,6 +21,21 @@ import {
 
 import { DashboardView } from "./dashboard-view";
 
+async function fetchSeriesSequentially<TRequest extends { id: string; name: string }>(
+  requests: TRequest[],
+  fetchOne: (request: TRequest) => Promise<void>,
+): Promise<string[]> {
+  const failedNames: string[] = [];
+  for (const request of requests) {
+    try {
+      await fetchOne(request);
+    } catch {
+      failedNames.push(request.name);
+    }
+  }
+  return failedNames;
+}
+
 export function DashboardPage() {
   const [marketRange, setMarketRange] = useState<MarketRange>("1m");
 
@@ -70,20 +85,22 @@ export function DashboardPage() {
     }),
     [commoditiesQuery.data?.items, indexesQuery.data?.items, mag7Query.data?.items],
   );
+  const portfolioSummarySettled = portfolioStatusQuery.data?.enabled !== true || portfolioQuery.isSuccess || portfolioQuery.isError;
+  const shouldFetchExpandedSeries = marketRange !== "1m" && portfolioSummarySettled;
 
   const marketSeriesQuery = useQuery({
     queryKey: ["market-series", marketRange, marketIdsByModule],
     enabled:
-      marketIdsByModule.commodities.length > 0 ||
-      marketIdsByModule.mag7.length > 0 ||
-      marketIdsByModule.indexes.length > 0,
+      shouldFetchExpandedSeries &&
+      (marketIdsByModule.commodities.length > 0 ||
+        marketIdsByModule.mag7.length > 0 ||
+        marketIdsByModule.indexes.length > 0),
     queryFn: async () => {
       const results: Record<"commodities" | "mag7" | "indexes", Record<string, SparkPoint[]>> = {
         commodities: {},
         mag7: {},
         indexes: {},
       };
-      const failedNames: string[] = [];
 
       const requests = [
         ...(commoditiesQuery.data?.items ?? []).map((item) => ({ module: "commodities" as const, id: item.id, name: item.name, fetcher: fetchCommoditySeries })),
@@ -91,16 +108,10 @@ export function DashboardPage() {
         ...(indexesQuery.data?.items ?? []).map((item) => ({ module: "indexes" as const, id: item.id, name: item.name, fetcher: fetchIndexSeries })),
       ];
 
-      await Promise.all(
-        requests.map(async (request) => {
-          try {
-            const series = await request.fetcher(request.id, marketRange);
-            results[request.module][request.id] = series.points;
-          } catch {
-            failedNames.push(request.name);
-          }
-        }),
-      );
+      const failedNames = await fetchSeriesSequentially(requests, async (request) => {
+        const series = await request.fetcher(request.id, marketRange);
+        results[request.module][request.id] = series.points;
+      });
 
       return { series: results, failedNames };
     },
@@ -114,21 +125,14 @@ export function DashboardPage() {
 
   const portfolioSeriesQuery = useQuery({
     queryKey: ["portfolio-series", marketRange, portfolioIds],
-    enabled: portfolioIds.length > 0,
+    enabled: shouldFetchExpandedSeries && portfolioIds.length > 0,
     queryFn: async () => {
       const results: Record<string, SparkPoint[]> = {};
-      const failedNames: string[] = [];
 
-      await Promise.all(
-        portfolioChartItems.map(async (item) => {
-          try {
-            const series = await fetchPortfolioSeries(item.id, marketRange);
-            results[item.id] = series.points;
-          } catch {
-            failedNames.push(item.name);
-          }
-        }),
-      );
+      const failedNames = await fetchSeriesSequentially(portfolioChartItems, async (item) => {
+        const series = await fetchPortfolioSeries(item.id, marketRange);
+        results[item.id] = series.points;
+      });
 
       return { series: results, failedNames };
     },

@@ -820,8 +820,9 @@ def test_market_enrichment_converts_usd_stock_value_to_sek(tmp_path, monkeypatch
     holding = load_combined_portfolio_holdings(tmp_path)[0]
     now = datetime.now(timezone.utc)
 
-    def fake_quotes(tickers, period):
+    def fake_quotes(tickers, period, **kwargs):
         assert set(tickers) == {"UEC", "USDSEK=X"}
+        assert kwargs["rate_limit_key"] == "portfolio_yahoo_finance"
         return {
             "UEC": QuoteSnapshot(timestamp=now, last=12.0, prev_close=11.5, history=[HistoryPoint(now, 12.0)]),
             "USDSEK=X": QuoteSnapshot(timestamp=now, last=10.0, prev_close=9.9, history=[HistoryPoint(now, 10.0)]),
@@ -850,7 +851,7 @@ def test_portfolio_levels_calculate_stock_distance_from_last_price(tmp_path, mon
 
     monkeypatch.setattr(
         "app.services.portfolio_data.yahoo_finance.fetch_quotes_with_history",
-        lambda tickers, period: (
+        lambda tickers, period, **_kwargs: (
             {"EX-B.ST": QuoteSnapshot(timestamp=now, last=150.0, prev_close=149.0, history=[HistoryPoint(now, 150.0)])},
             {},
         ),
@@ -880,7 +881,7 @@ def test_portfolio_levels_estimate_stock_target_and_stop_when_no_manual_file(tmp
 
     monkeypatch.setattr(
         "app.services.portfolio_data.yahoo_finance.fetch_quotes_with_history",
-        lambda tickers, period: (
+        lambda tickers, period, **_kwargs: (
             {"EX-B.ST": QuoteSnapshot(timestamp=now, last=150.0, prev_close=148.0, history=history)},
             {},
         ),
@@ -917,7 +918,7 @@ def test_portfolio_levels_estimate_foreign_stock_from_acquisition_price_in_instr
 
     monkeypatch.setattr(
         "app.services.portfolio_data.yahoo_finance.fetch_quotes_with_history",
-        lambda tickers, period: (
+        lambda tickers, period, **_kwargs: (
             {
                 "UEC": QuoteSnapshot(timestamp=now, last=10.64, prev_close=10.5, history=[HistoryPoint(now, 10.64)]),
                 "USDSEK=X": QuoteSnapshot(timestamp=now, last=10.0, prev_close=10.0, history=[HistoryPoint(now, 10.0)]),

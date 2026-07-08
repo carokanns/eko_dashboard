@@ -42,6 +42,7 @@ PORTFOLIO_OWNERS = (
     {"owner_id": "jp", "owner_label": "JP", "dirname": "JP_avanza"},
     {"owner_id": "pat", "owner_label": "Pat", "dirname": "Pat_avanza"},
 )
+PORTFOLIO_YAHOO_RATE_LIMIT_KEY = "portfolio_yahoo_finance"
 
 
 def portfolio_data_dir() -> Path:
@@ -1503,6 +1504,7 @@ def enrich_holdings_with_market_data(
     snapshots, errors = yahoo_finance.fetch_quotes_with_history(
         tickers=[*ticker_by_id.values(), *exchange_ticker_by_currency.values()],
         period="1y",
+        rate_limit_key=PORTFOLIO_YAHOO_RATE_LIMIT_KEY,
     )
     sek_per_currency = {
         currency: snapshot.last
@@ -1571,7 +1573,11 @@ def enrich_holdings_with_market_data(
 def fetch_portfolio_series(holding: PortfolioHolding, range_key: str) -> list[SparkPoint]:
     if not holding.ticker:
         return []
-    points = yahoo_finance.fetch_history(ticker=holding.ticker, range_key=range_key)
+    points = yahoo_finance.fetch_history(
+        ticker=holding.ticker,
+        range_key=range_key,
+        rate_limit_key=PORTFOLIO_YAHOO_RATE_LIMIT_KEY,
+    )
     return [SparkPoint(t=point.t, v=round(point.close, 2)) for point in points]
 
 

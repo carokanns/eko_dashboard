@@ -83,13 +83,14 @@ def fetch_quotes_with_history(
     tickers: Iterable[str],
     period: str = "1y",
     interval: str = "1d",
+    rate_limit_key: str = PROVIDER_NAME,
 ) -> tuple[dict[str, QuoteSnapshot], dict[str, str]]:
     snapshots: dict[str, QuoteSnapshot] = {}
     errors: dict[str, str] = {}
 
     for ticker in tickers:
         try:
-            if not rate_limiter.allow(PROVIDER_NAME, YAHOO_MAX_CALLS, YAHOO_PERIOD_SECONDS):
+            if not rate_limiter.allow(rate_limit_key, YAHOO_MAX_CALLS, YAHOO_PERIOD_SECONDS):
                 raise RuntimeError("Yahoo Finance rate limit reached.")
 
             dataframe = _with_retry(
@@ -116,12 +117,12 @@ def fetch_quotes_with_history(
     return snapshots, errors
 
 
-def fetch_history(ticker: str, range_key: str) -> list[HistoryPoint]:
+def fetch_history(ticker: str, range_key: str, *, rate_limit_key: str = PROVIDER_NAME) -> list[HistoryPoint]:
     period = RANGE_TO_PERIOD.get(range_key)
     if period is None:
         raise ValueError(f"Unsupported range: {range_key}")
 
-    if not rate_limiter.allow(PROVIDER_NAME, YAHOO_MAX_CALLS, YAHOO_PERIOD_SECONDS):
+    if not rate_limiter.allow(rate_limit_key, YAHOO_MAX_CALLS, YAHOO_PERIOD_SECONDS):
         message = "Yahoo Finance rate limit reached."
         provider_monitor.record_failure(PROVIDER_NAME, message)
         raise RuntimeError(message)
