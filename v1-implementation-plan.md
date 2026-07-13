@@ -1,4 +1,4 @@
-# V1-roadmap: Ekonomi Dashboard (baserat på `status4.md` + Kombinerad Spec V1)
+# V1-roadmap: Ekonomi Dashboard (historisk genomförandeplan)
 
 ## Status 2026-02-14
 
@@ -17,7 +17,7 @@ Målet är att gå från stabil MVP+ till en full V1 med robust drift för priva
 
 ## Omfattning och målbild
 
-1. Slutföra kvarvarande spec-krav som saknas enligt `status4.md`.
+1. Slutföra de kvarvarande spec-krav som identifierades vid planens framtagning.
 2. Hålla befintliga endpoints stabila för UI-kompatibilitet.
 3. Göra datalager och scheduler tillförlitliga vid omstart/fel.
 4. Leverera tydliga drift- och testkriterier för V1-release.
@@ -120,7 +120,7 @@ Målet är att gå från stabil MVP+ till en full V1 med robust drift för priva
 
 ## Antaganden och valda standarder
 
-1. `status4.md` gäller som kravtolkning före äldre specdetaljer.
+1. Planens låsta designval gällde som kravtolkning före äldre specdetaljer under V1-arbetet.
 2. Svensk decimal-komma/tusentalsmellanslag förblir utanför scope i denna V1.
 3. Privat nät (LAN/Tailscale) är primär driftmodell; publik auth är inte blockerande för V1.
 4. SQLite är primär runtime i V1; PostgreSQL-stöd säkras genom kompatibelt schema och migrationsdisciplin.
