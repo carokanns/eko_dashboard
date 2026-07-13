@@ -658,6 +658,7 @@ test("renders shared inflation graph with fixed twelve month series", () => {
 });
 
 test("opens slideshow with interval choice, table rows and controls", () => {
+  const onMarketRangeChange = vi.fn();
   const commodities = {
     ...summary,
     items: [
@@ -691,6 +692,7 @@ test("opens slideshow with interval choice, table rows and controls", () => {
       }}
       inflation={inflation}
       inflationSeries={fixedInflationSeries}
+      onMarketRangeChange={onMarketRangeChange}
       warnings={[]}
     />,
   );
@@ -701,8 +703,14 @@ test("opens slideshow with interval choice, table rows and controls", () => {
 
   const overlay = screen.getByTestId("slideshow-overlay");
   expect(within(overlay).getByRole("heading", { name: "Guld" })).toBeInTheDocument();
-  expect(within(overlay).getByText("15 s")).toBeInTheDocument();
-  expect(within(overlay).getByText("1 mån")).toBeInTheDocument();
+  const overlayInterval = within(overlay).getByRole("combobox", { name: "Bildspelsintervall i bildspel" });
+  const overlayRange = within(overlay).getByRole("combobox", { name: "Tidsspann i bildspel" });
+  expect(overlayInterval).toHaveValue("15");
+  expect(overlayRange).toHaveValue("1m");
+  fireEvent.change(overlayInterval, { target: { value: "30" } });
+  fireEvent.change(overlayRange, { target: { value: "6m" } });
+  expect(overlayInterval).toHaveValue("30");
+  expect(onMarketRangeChange).toHaveBeenCalledWith("6m");
 
   fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
   expect(within(overlay).getByRole("heading", { name: "Brentolja" })).toBeInTheDocument();
@@ -717,7 +725,8 @@ test("opens slideshow with interval choice, table rows and controls", () => {
   expect(within(overlay).getByRole("heading", { name: "Inflation: Sverige & USA" })).toBeInTheDocument();
 
   fireEvent.click(within(overlay).getByRole("button", { name: "Pausa" }));
-  expect(within(overlay).getByText("Pausad")).toBeInTheDocument();
+  expect(within(overlay).queryByText("Pausad")).not.toBeInTheDocument();
+  expect(overlayInterval).toHaveValue("30");
   fireEvent.click(within(overlay).getByRole("button", { name: "Föregående" }));
   expect(within(overlay).getByRole("heading", { name: "MSCI ACWI" })).toBeInTheDocument();
   fireEvent.click(within(overlay).getByRole("button", { name: "Stäng" }));

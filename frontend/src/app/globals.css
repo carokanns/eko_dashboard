@@ -360,6 +360,25 @@ body {
   text-transform: uppercase;
 }
 
+.slideshow-setting {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 30px 5px 11px;
+  background-color: var(--surface-muted);
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+[data-theme="dark"] .slideshow-setting {
+  background-color: #2b3342;
+  border-color: #465065;
+  color: #edf3ff;
+}
+
 .slideshow-close {
   background: #1b2a41;
   border-color: #1b2a41;

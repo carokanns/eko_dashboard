@@ -93,6 +93,8 @@ const marketRanges: Array<{ id: MarketRange; label: string }> = [
   { id: "1y", label: "12 mån" },
 ];
 
+const slideshowIntervals = [5, 10, 15, 30] as const;
+
 const EMPTY_ITEMS: SummaryItem[] = [];
 const EMPTY_PORTFOLIO_ITEMS: PortfolioHolding[] = [];
 const SLIDESHOW_LOG_KEY = "dashboard-slideshow-log";
@@ -521,22 +523,26 @@ function SlideshowOverlay({
   slides,
   activeIndex,
   intervalSeconds,
-  marketRangeLabel,
+  marketRange,
   isPaused,
   onClose,
   onNext,
   onPrevious,
+  onIntervalChange,
+  onMarketRangeChange,
   onTogglePause,
   onExportLog,
 }: {
   slides: SlideshowSlide[];
   activeIndex: number;
   intervalSeconds: number;
-  marketRangeLabel: string;
+  marketRange: MarketRange;
   isPaused: boolean;
   onClose: () => void;
   onNext: () => void;
   onPrevious: () => void;
+  onIntervalChange: (seconds: number) => void;
+  onMarketRangeChange: (range: MarketRange) => void;
   onTogglePause: () => void;
   onExportLog: () => void;
 }) {
@@ -549,8 +555,26 @@ function SlideshowOverlay({
           <article className="slideshow-card">
             <div className="slideshow-controls slideshow-slide-controls">
               <span className="badge">{slides.length > 0 ? `${activeIndex + 1} / ${slides.length}` : "0 / 0"}</span>
-              <span className="badge">{isPaused ? "Pausad" : `${intervalSeconds} s`}</span>
-              <span className="badge">{marketRangeLabel}</span>
+              <select
+                className="slideshow-setting"
+                aria-label="Bildspelsintervall i bildspel"
+                value={intervalSeconds}
+                onChange={(event) => onIntervalChange(Number(event.target.value))}
+              >
+                {slideshowIntervals.map((seconds) => (
+                  <option key={seconds} value={seconds}>{seconds} s</option>
+                ))}
+              </select>
+              <select
+                className="slideshow-setting"
+                aria-label="Tidsspann i bildspel"
+                value={marketRange}
+                onChange={(event) => onMarketRangeChange(event.target.value as MarketRange)}
+              >
+                {marketRanges.map((rangeOption) => (
+                  <option key={rangeOption.id} value={rangeOption.id}>{rangeOption.label}</option>
+                ))}
+              </select>
               <button type="button" className="slideshow-control" onClick={onPrevious}>
                 Föregående
               </button>
@@ -1089,10 +1113,9 @@ export function DashboardView({
             value={slideshowIntervalSeconds}
             onChange={(event) => setSlideshowIntervalSeconds(Number(event.target.value))}
           >
-            <option value={5}>5 sek</option>
-            <option value={10}>10 sek</option>
-            <option value={15}>15 sek</option>
-            <option value={30}>30 sek</option>
+            {slideshowIntervals.map((seconds) => (
+              <option key={seconds} value={seconds}>{seconds} sek</option>
+            ))}
           </select>
         </div>
       </section>
@@ -1347,11 +1370,13 @@ export function DashboardView({
           slides={slideshowSlides}
           activeIndex={safeSlideshowIndex}
           intervalSeconds={slideshowIntervalSeconds}
-          marketRangeLabel={marketRangeLabel}
+          marketRange={marketRange}
           isPaused={isSlideshowPaused}
           onClose={() => setIsSlideshowOpen(false)}
           onNext={goToNextSlide}
           onPrevious={goToPreviousSlide}
+          onIntervalChange={setSlideshowIntervalSeconds}
+          onMarketRangeChange={(range) => onMarketRangeChange?.(range)}
           onTogglePause={() => setIsSlideshowPaused((current) => !current)}
           onExportLog={exportSlideshowLog}
         />
