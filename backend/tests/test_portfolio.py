@@ -7,6 +7,7 @@ import pandas as pd
 from fastapi.testclient import TestClient
 
 from app.models.summary import SparkPoint
+from app.providers import avanza_funds
 from app.providers.yahoo_finance import HistoryPoint, QuoteSnapshot
 from app.services.exchange_rates import ExchangeRate
 from app.services.portfolio_data import (
@@ -347,6 +348,29 @@ def test_combined_portfolio_writes_snapshots_per_owner(tmp_path):
     assert len(pat_rows) == 2
     assert ";1500.0;" in jp_rows[1]
     assert ";900.0;" in pat_rows[1]
+
+
+def test_combined_portfolio_prefers_known_instrument_type(tmp_path):
+    _write_single_position(
+        tmp_path,
+        "JP_avanza",
+        name="Gemensam fond",
+        isin="LU0000000001",
+        instrument_type="UNKNOWN",
+    )
+    _write_single_position(
+        tmp_path,
+        "Pat_avanza",
+        name="Gemensam fond",
+        isin="LU0000000001",
+        instrument_type="FUND",
+        market="FUND",
+    )
+
+    holding = load_combined_portfolio_holdings(tmp_path)[0]
+
+    assert holding.instrument_type == "FUND"
+    assert holding.market == "FUND"
 
 
 def test_portfolio_accounts_read_bank_account_per_owner(tmp_path):
@@ -1017,7 +1041,18 @@ def test_fund_nav_updates_combined_and_owner_values_without_changing_costs(tmp_p
 
     monkeypatch.setattr(
         "app.services.portfolio_data.avanza_funds.fetch_fund_nav",
-        lambda *, isin, name: FundNav(isin=isin, name=name, nav=100.0, nav_date=now, currency="SEK", orderbook_id="1"),
+        lambda *, isin, name: FundNav(
+            isin=isin,
+            name=name,
+            nav=100.0,
+            nav_date=now,
+            currency="SEK",
+            orderbook_id="1",
+            history=[
+                avanza_funds.FundHistoryPoint(t=now - timedelta(days=1), close=99.0),
+                avanza_funds.FundHistoryPoint(t=now, close=100.0),
+            ],
+        ),
     )
 
     holding = enrich_holdings_with_market_data(
@@ -1031,6 +1066,9 @@ def test_fund_nav_updates_combined_and_owner_values_without_changing_costs(tmp_p
     assert [owner.current_value for owner in holding.owners] == [1000, 500]
     assert [owner.gain_abs for owner in holding.owners] == [500, 200]
     assert holding.valuation_source == "avanza_funds"
+    assert holding.chart_source == "avanza_funds"
+    assert holding.has_chart is True
+    assert holding.sparkline[-1].v == 100.0
     assert holding.valuation_is_stale is False
     assert fund_price_cache_path(tmp_path).exists()
 
@@ -1183,4 +1221,5 @@ def test_portfolio_series_for_unmapped_holding_returns_empty(client: TestClient,
     response = client.get("/api/portfolio/series", params={"id": fund_id, "range": "1m"})
     assert response.status_code == 200
     assert response.json()["points"] == []
-    assert response.json()["meta"]["stale_reason"] == "no_ticker_mapping"
+    assert response.json()["meta"]["source"] == "avanza_funds"
+    assert response.json()["meta"]["stale_reason"] == "provider_error"

@@ -122,7 +122,8 @@ def portfolio_series(id: str, range: str = Query(default="1m", pattern="^(1m|3m|
     holding = next((item for item in holdings if item.id == id), None)
     if holding is None:
         raise HTTPException(status_code=404, detail=f"Unknown portfolio holding id: {id}")
-    if not holding.ticker:
+    is_avanza_fund = holding.instrument_type.upper() == "FUND" and bool(holding.isin)
+    if not holding.ticker and not is_avanza_fund:
         return {
             "id": id,
             "range": range,
@@ -136,7 +137,9 @@ def portfolio_series(id: str, range: str = Query(default="1m", pattern="^(1m|3m|
             },
         }
 
-    cache_key = f"series:portfolio:{id}:{range}:{holding.ticker}"
+    series_source = "avanza_funds" if is_avanza_fund else "yahoo_finance"
+    series_key = holding.isin if is_avanza_fund else holding.ticker
+    cache_key = f"series:portfolio:{id}:{range}:{series_source}:{series_key}"
     cached = cache.get(cache_key)
     if cached is not None:
         return {
@@ -144,7 +147,7 @@ def portfolio_series(id: str, range: str = Query(default="1m", pattern="^(1m|3m|
             "range": range,
             "points": cached.value,
             "meta": {
-                "source": "yahoo_finance",
+                "source": series_source,
                 "cached": True,
                 "fetched_at": to_stockholm_timestamp(cached.fetched_at),
                 "stale_reason": "none",
@@ -152,7 +155,7 @@ def portfolio_series(id: str, range: str = Query(default="1m", pattern="^(1m|3m|
             },
         }
 
-    points = fetch_portfolio_series(holding, range)
+    points = fetch_portfolio_series(holding, range, fund_cache_dir=portfolio_base_data_dir())
     fetched_at = datetime.now(timezone.utc)
     cache.set(cache_key, points, fetched_at=fetched_at, update_last_update=False)
     return {
@@ -160,7 +163,7 @@ def portfolio_series(id: str, range: str = Query(default="1m", pattern="^(1m|3m|
         "range": range,
         "points": points,
         "meta": {
-            "source": "yahoo_finance",
+            "source": series_source,
             "cached": False,
             "fetched_at": to_stockholm_timestamp(fetched_at),
             "stale_reason": "none" if points else "provider_error",

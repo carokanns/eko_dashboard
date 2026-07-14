@@ -101,7 +101,6 @@ const EMPTY_PORTFOLIO_ITEMS: PortfolioHolding[] = [];
 const SLIDESHOW_LOG_KEY = "dashboard-slideshow-log";
 const SLIDESHOW_LOG_LIMIT = 2000;
 const DEFAULT_SEK_TO_THB_RATE = 3.43;
-
 type BrowserMemoryInfo = {
   usedJSHeapSize?: number;
   totalJSHeapSize?: number;
@@ -881,7 +880,8 @@ export function DashboardView({
   const selectedMarketChart = kpiItems.find((item) => item.id === selectedMarketChartId) ?? kpiItems[0] ?? null;
   const selectedPortfolioHolding = filteredPortfolioItems.find((item) => item.id === selectedMarketChartId) ?? filteredPortfolioItems[0] ?? null;
   const portfolioAccounts = useMemo(() => portfolio?.accounts ?? [], [portfolio?.accounts]);
-  const portfolioOwnerSummaries = useMemo(() => buildPortfolioOwnerSummaries(filteredPortfolioItems, portfolioAccounts), [filteredPortfolioItems, portfolioAccounts]);
+  const slideshowPortfolioItems = filteredPortfolioItems;
+  const portfolioOwnerSummaries = useMemo(() => buildPortfolioOwnerSummaries(slideshowPortfolioItems, portfolioAccounts), [portfolioAccounts, slideshowPortfolioItems]);
   const sekToThbRate = portfolio?.meta.exchange_rates?.sek_to_thb?.rate ?? DEFAULT_SEK_TO_THB_RATE;
   const slideshowSlides: SlideshowSlide[] = useMemo(
     () => [
@@ -915,7 +915,7 @@ export function DashboardView({
             },
           ]
         : []),
-      ...filteredPortfolioItems
+      ...slideshowPortfolioItems
         .filter((holding) => holding.has_chart && holding.sparkline.length >= 2)
         .map((holding) => ({
           id: `portfolio-${holding.id}`,
@@ -938,7 +938,7 @@ export function DashboardView({
           ]
         : []),
     ],
-    [filteredCommodityItems, filteredIndexItems, filteredMag7Items, filteredPortfolioItems, portfolio, portfolioOwnerSummaries, sekToThbRate, swedenInflationItem, swedenInflationPoints, usaInflationItem, usaInflationPoints],
+    [filteredCommodityItems, filteredIndexItems, filteredMag7Items, filteredPortfolioItems, portfolio, portfolioOwnerSummaries, sekToThbRate, slideshowPortfolioItems, swedenInflationItem, swedenInflationPoints, usaInflationItem, usaInflationPoints],
   );
   const safeSlideshowIndex = slideshowSlides.length > 0 ? Math.min(slideshowIndex, slideshowSlides.length - 1) : 0;
   const activeSlideshowSlide = slideshowSlides[safeSlideshowIndex] ?? null;

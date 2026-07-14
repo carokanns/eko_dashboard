@@ -193,6 +193,17 @@ def _cache_entry_to_fund_nav(entry: dict[str, Any]) -> avanza_funds.FundNav | No
     name = str(entry.get("name") or "").strip()
     if not isin or not name:
         return None
+    history = []
+    for point in entry.get("history", []):
+        if not isinstance(point, dict):
+            continue
+        point_time = _parse_cache_timestamp(point.get("t"))
+        try:
+            close = float(point["close"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if point_time is not None and math.isfinite(close) and close > 0:
+            history.append(avanza_funds.FundHistoryPoint(t=point_time, close=close))
     return avanza_funds.FundNav(
         isin=isin,
         name=name,
@@ -200,6 +211,7 @@ def _cache_entry_to_fund_nav(entry: dict[str, Any]) -> avanza_funds.FundNav | No
         nav_date=_parse_cache_timestamp(entry.get("nav_date")),
         currency=str(entry.get("currency") or "").strip() or None,
         orderbook_id=str(entry.get("orderbook_id") or "").strip() or None,
+        history=history,
     )
 
 
@@ -211,6 +223,7 @@ def _fund_cache_entry(quote: avanza_funds.FundNav, fetched_at: datetime) -> dict
         "nav_date": quote.nav_date.isoformat() if quote.nav_date else None,
         "currency": quote.currency,
         "orderbook_id": quote.orderbook_id,
+        "history": [{"t": point.t.isoformat(), "close": point.close} for point in quote.history],
         "fetched_at": fetched_at.isoformat(),
     }
 
@@ -241,8 +254,28 @@ def _apply_fund_nav(
     acquisition_value = holding.acquisition_value
     gain_abs = current_value - acquisition_value if acquisition_value is not None else None
     gain_pct = (gain_abs / acquisition_value * 100.0) if gain_abs is not None and acquisition_value not in (None, 0) else None
+    chart_update: dict[str, Any] = {}
+    if quote.history:
+        latest = quote.history[-1]
+        previous_close = quote.history[-2].close if len(quote.history) > 1 else None
+        metrics = calculate_metrics(latest.close, previous_close, quote.history)
+        chart_update = {
+            "chart_source": "avanza_funds",
+            "chart_label": "Avanza fond-NAV",
+            "has_chart": True,
+            "last": _round(latest.close),
+            "day_abs": _round(metrics["day_abs"]),
+            "day_pct": _round(metrics["day_pct"]),
+            "w1_pct": _round(metrics["w1_pct"]),
+            "ytd_pct": _round(metrics["ytd_pct"]),
+            "y1_pct": _round(metrics["y1_pct"]),
+            "timestamp_local": latest.t,
+            "is_stale": is_stale,
+            "sparkline": [SparkPoint(t=point.t, v=round(point.close, 2)) for point in quote.history[-30:]],
+        }
     return holding.model_copy(
         update={
+            **chart_update,
             "owners": owners,
             "current_value": current_value,
             "gain_abs": _round(gain_abs),
@@ -277,6 +310,23 @@ def _enrich_fund_valuations(
         cached_at = _parse_cache_timestamp(cached_entry.get("fetched_at")) if cached_entry else None
         is_fresh = cached_quote is not None and cached_at is not None and now - cached_at <= timedelta(seconds=AVANZA_FUND_CACHE_SECONDS)
         if is_fresh:
+            if not cached_quote.history and cached_quote.orderbook_id:
+                try:
+                    history = avanza_funds.fetch_fund_history(orderbook_id=cached_quote.orderbook_id, range_key="1y")
+                except Exception:
+                    history = []
+                if history:
+                    cached_quote = avanza_funds.FundNav(
+                        isin=cached_quote.isin,
+                        name=cached_quote.name,
+                        nav=cached_quote.nav,
+                        nav_date=cached_quote.nav_date,
+                        currency=cached_quote.currency,
+                        orderbook_id=cached_quote.orderbook_id,
+                        history=history,
+                    )
+                    cache[isin] = _fund_cache_entry(cached_quote, cached_at)
+                    cache_changed = True
             quote_by_isin[isin] = (cached_quote, cached_at, False, None)
             continue
         try:
@@ -894,7 +944,7 @@ def _merge_portfolio_holdings(owner_holdings: list[tuple[str, str, PortfolioHold
 
     merged: list[PortfolioHolding] = []
     for key, items in grouped.items():
-        template = items[0][2]
+        template = next((item for _, _, item in items if item.instrument_type.upper() != "UNKNOWN"), items[0][2])
         chart_template = next((item for _, _, item in items if item.ticker), template)
         quantity = round(sum(item.quantity for _, _, item in items), 6)
         current_value = round(sum(item.current_value for _, _, item in items), 2)
@@ -1504,7 +1554,11 @@ def enrich_holdings_with_market_data(
         holdings,
         cache_dir=fund_cache_dir or portfolio_base_data_dir(),
     )
-    ticker_by_id = {item.id: item.ticker for item in holdings if item.ticker}
+    ticker_by_id = {
+        item.id: item.ticker
+        for item in holdings
+        if item.ticker and not (item.instrument_type.upper() == "FUND" and item.has_chart)
+    }
     if not ticker_by_id:
         return holdings
 
@@ -1530,6 +1584,9 @@ def enrich_holdings_with_market_data(
     }
     output: list[PortfolioHolding] = []
     for holding in holdings:
+        if holding.instrument_type.upper() == "FUND" and holding.has_chart:
+            output.append(holding)
+            continue
         if not holding.ticker:
             output.append(holding)
             continue
@@ -1587,7 +1644,30 @@ def enrich_holdings_with_market_data(
     return output
 
 
-def fetch_portfolio_series(holding: PortfolioHolding, range_key: str) -> list[SparkPoint]:
+def fetch_portfolio_series(
+    holding: PortfolioHolding,
+    range_key: str,
+    *,
+    fund_cache_dir: Path | None = None,
+) -> list[SparkPoint]:
+    if holding.instrument_type.upper() == "FUND" and holding.isin:
+        cache = _load_fund_price_cache(fund_cache_dir or portfolio_base_data_dir())
+        quote = _cache_entry_to_fund_nav(cache.get(holding.isin.lower(), {}))
+        if quote is None:
+            try:
+                quote = avanza_funds.fetch_fund_nav(isin=holding.isin, name=holding.name)
+            except Exception:
+                return []
+        if range_key == "1y" and quote.history:
+            history = quote.history
+        elif quote.orderbook_id:
+            try:
+                history = avanza_funds.fetch_fund_history(orderbook_id=quote.orderbook_id, range_key=range_key)
+            except Exception:
+                return []
+        else:
+            return []
+        return [SparkPoint(t=point.t, v=round(point.close, 2)) for point in history]
     if not holding.ticker:
         return []
     points = yahoo_finance.fetch_history(

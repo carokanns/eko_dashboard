@@ -390,6 +390,99 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
   expect(within(overlay).queryByText("200 kr (+25.00%)")).not.toBeInTheDocument();
 });
 
+test("keeps JP and Pat ownership separate for SEB AI in the slideshow", () => {
+  const portfolio = {
+    enabled: true,
+    holdings: [
+      {
+        ...summary.items[0],
+        id: "lu2602444262",
+        name: "SEB AI",
+        short_name: "SEB AI",
+        isin: "LU2602444262",
+        instrument_type: "FUND",
+        market: "FUND",
+        currency: "SEK",
+        quantity: 53.05997,
+        current_value: 10751.01,
+        acquisition_price_sek: 202.6,
+        acquisition_value: 10750,
+        gain_abs: 1.01,
+        gain_pct: 0.01,
+        ticker: null,
+        chart_source: null,
+        chart_label: null,
+        has_chart: false,
+        is_provisional: true,
+        owners: [
+          {
+            owner_id: "jp",
+            owner_label: "JP",
+            current_value: 751.01,
+            acquisition_value: 750,
+            gain_abs: 1.01,
+            gain_pct: 0.13,
+            quantity: 3.7065,
+          },
+          {
+            owner_id: "pat",
+            owner_label: "Pat",
+            current_value: 10000,
+            acquisition_value: 10000,
+            gain_abs: 0,
+            gain_pct: 0,
+            quantity: 49.35347,
+          },
+        ],
+      },
+    ],
+    totals: {
+      current_value: 10751.01,
+      acquisition_value: 10750,
+      gain_abs: 1.01,
+      gain_pct: 0.01,
+      holding_count: 1,
+      chart_count: 0,
+    },
+    accounts: [
+      { owner_id: "jp", owner_label: "JP", total_value: 100, bank_value: 100, available_for_purchase: 0, account_count: 1, source_file: "ledger" },
+      { owner_id: "pat", owner_label: "Pat", total_value: 500, bank_value: 200, available_for_purchase: 300, account_count: 2, source_file: "ledger" },
+    ],
+    meta: { source: "local_avanza_export", cached: false, fetched_at: "2026-07-14T10:00:00Z" },
+  };
+
+  render(
+    <DashboardView
+      commodities={summary}
+      mag7={summary}
+      inflation={null}
+      portfolio={portfolio}
+      inflationSeries={{}}
+      warnings={[]}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Min Avanza" }));
+  expect(screen.getByText("751 kr, 10 000 kr")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Bildspel" }));
+  const overlay = screen.getByTestId("slideshow-overlay");
+  fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
+  fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
+
+  const jpCard = within(overlay).getByRole("heading", { name: "JP" }).closest(".card-surface");
+  const patCard = within(overlay).getByRole("heading", { name: "Pat" }).closest(".card-surface");
+  expect(jpCard).not.toBeNull();
+  expect(patCard).not.toBeNull();
+  expect(within(jpCard as HTMLElement).getByText("1 innehav")).toBeInTheDocument();
+  expect(within(jpCard as HTMLElement).getByText("851 kr")).toBeInTheDocument();
+  expect(within(jpCard as HTMLElement).getByText("750 kr")).toBeInTheDocument();
+  expect(within(patCard as HTMLElement).getByText("1 innehav")).toBeInTheDocument();
+  expect(within(patCard as HTMLElement).getByText("10 500 kr")).toBeInTheDocument();
+  expect(within(patCard as HTMLElement).getAllByText("10 000 kr")).toHaveLength(2);
+  expect(within(overlay).getByText("11 351 kr")).toBeInTheDocument();
+});
+
 test("sorts Mag7 table with sort controls", () => {
   const mag7 = {
     ...summary,

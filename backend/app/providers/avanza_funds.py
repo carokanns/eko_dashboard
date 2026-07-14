@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
 import math
@@ -12,7 +12,20 @@ from app.core.settings import AVANZA_FUND_MAX_CALLS, AVANZA_FUND_PERIOD_SECONDS
 
 
 FUND_LIST_URL = "https://www.avanza.se/_api/fund-guide/list?shouldCheckFundExcludedFromPromotion=true"
+PRICE_CHART_URL = "https://www.avanza.se/_api/price-chart/stock/{orderbook_id}"
 PROVIDER_NAME = "avanza_funds"
+RANGE_TO_TIME_PERIOD = {
+    "1m": "one_month",
+    "3m": "three_months",
+    "6m": "six_months",
+    "1y": "one_year",
+}
+
+
+@dataclass(frozen=True)
+class FundHistoryPoint:
+    t: datetime
+    close: float
 
 
 @dataclass(frozen=True)
@@ -23,6 +36,7 @@ class FundNav:
     nav_date: datetime | None
     currency: str | None
     orderbook_id: str | None
+    history: list[FundHistoryPoint] = field(default_factory=list)
 
 
 def _search_payload(name: str) -> dict[str, object]:
@@ -81,6 +95,60 @@ def _post_json(payload: dict[str, object]) -> dict[str, object]:
     return parsed
 
 
+def _get_json(url: str) -> dict[str, object]:
+    request = Request(url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0"})
+    with urlopen(request, timeout=20) as response:
+        parsed = json.loads(response.read().decode("utf-8"))
+    if not isinstance(parsed, dict):
+        raise ValueError("Avanza returned an unexpected price chart response.")
+    return parsed
+
+
+def _fetch_fund_history(orderbook_id: str, range_key: str) -> list[FundHistoryPoint]:
+    time_period = RANGE_TO_TIME_PERIOD.get(range_key)
+    if time_period is None:
+        raise ValueError(f"Unsupported fund history range: {range_key}")
+    resolution = "&resolution=day" if range_key == "1m" else ""
+    payload = _get_json(
+        f"{PRICE_CHART_URL.format(orderbook_id=orderbook_id)}?timePeriod={time_period}{resolution}"
+    )
+    rows = payload.get("ohlc")
+    if not isinstance(rows, list):
+        raise ValueError("Avanza returned no fund price history.")
+    points: list[FundHistoryPoint] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            timestamp = float(row["timestamp"])
+            close = float(row["close"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not math.isfinite(timestamp) or not math.isfinite(close) or close <= 0:
+            continue
+        points.append(FundHistoryPoint(t=datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc), close=close))
+    return points
+
+
+def fetch_fund_history(*, orderbook_id: str, range_key: str) -> list[FundHistoryPoint]:
+    """Fetch public daily NAV history for one Avanza fund orderbook."""
+    normalized_id = orderbook_id.strip()
+    if not normalized_id:
+        raise ValueError("An orderbook id is required to fetch fund history.")
+    provider_monitor.record_attempt(PROVIDER_NAME)
+    if not rate_limiter.allow(PROVIDER_NAME, AVANZA_FUND_MAX_CALLS, AVANZA_FUND_PERIOD_SECONDS):
+        message = "Avanza fund rate limit reached."
+        provider_monitor.record_failure(PROVIDER_NAME, message)
+        raise RuntimeError(message)
+    try:
+        points = _fetch_fund_history(normalized_id, range_key)
+    except Exception as error:
+        provider_monitor.record_failure(PROVIDER_NAME, str(error))
+        raise
+    provider_monitor.record_success(PROVIDER_NAME)
+    return points
+
+
 def fetch_fund_nav(*, isin: str, name: str) -> FundNav:
     """Fetch one public fund NAV and validate it against the requested ISIN."""
     normalized_isin = isin.strip().upper()
@@ -107,13 +175,22 @@ def fetch_fund_nav(*, isin: str, name: str) -> FundNav:
         nav = float(match.get("nav"))
         if not math.isfinite(nav) or nav <= 0:
             raise ValueError(f"Avanza returned an invalid NAV for {normalized_isin}.")
+        orderbook_id = str(match.get("orderbookId") or "").strip() or None
+        history: list[FundHistoryPoint] = []
+        if orderbook_id:
+            try:
+                history = _fetch_fund_history(orderbook_id, "1y")
+            except Exception:
+                # Current NAV is still useful if the optional chart endpoint is unavailable.
+                history = []
         result = FundNav(
             isin=normalized_isin,
             name=str(match.get("name") or name).strip() or name,
             nav=nav,
             nav_date=_parse_timestamp(match.get("navDate")),
             currency=str(match.get("currencyCode") or "").strip() or None,
-            orderbook_id=str(match.get("orderbookId") or "").strip() or None,
+            orderbook_id=orderbook_id,
+            history=history,
         )
     except Exception as error:
         provider_monitor.record_failure(PROVIDER_NAME, str(error))
