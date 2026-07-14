@@ -51,7 +51,8 @@ type PortfolioOwnerSummary = {
   gain_abs: number;
   gain_pct: number | null;
   bank_value: number;
-  total_with_bank: number;
+  available_for_purchase: number;
+  total_with_cash: number;
   holding_count: number;
 };
 type SlideshowSlide =
@@ -164,8 +165,8 @@ function exportSlideshowLog() {
   URL.revokeObjectURL(link.href);
 }
 
-function portfolioTotalWithBank(owners: PortfolioOwnerSummary[]): number {
-  return owners.reduce((sum, owner) => sum + owner.total_with_bank, 0);
+function portfolioTotalWithCash(owners: PortfolioOwnerSummary[]): number {
+  return owners.reduce((sum, owner) => sum + owner.total_with_cash, 0);
 }
 
 function PortfolioLevelsLine({ holding, compact = false, align = "left" }: { holding: PortfolioHolding; compact?: boolean; align?: "left" | "right" }) {
@@ -224,7 +225,8 @@ function buildPortfolioOwnerSummaries(items: PortfolioHolding[], accounts: Portf
         gain_abs: 0,
         gain_pct: null,
         bank_value: 0,
-        total_with_bank: 0,
+        available_for_purchase: 0,
+        total_with_cash: 0,
         holding_count: 0,
       };
       current.current_value += owner.current_value;
@@ -244,10 +246,12 @@ function buildPortfolioOwnerSummaries(items: PortfolioHolding[], accounts: Portf
       gain_abs: 0,
       gain_pct: null,
       bank_value: 0,
-      total_with_bank: 0,
+      available_for_purchase: 0,
+      total_with_cash: 0,
       holding_count: 0,
     };
     current.bank_value = account.bank_value;
+    current.available_for_purchase = account.available_for_purchase;
     summaries.set(account.owner_id, current);
   }
 
@@ -259,7 +263,8 @@ function buildPortfolioOwnerSummaries(items: PortfolioHolding[], accounts: Portf
       acquisition_value: Math.round(owner.acquisition_value),
       gain_abs: Math.round(owner.gain_abs),
       bank_value: Math.round(owner.bank_value),
-      total_with_bank: Math.round(owner.current_value + owner.bank_value),
+      available_for_purchase: Math.round(owner.available_for_purchase),
+      total_with_cash: Math.round(owner.current_value + owner.bank_value + owner.available_for_purchase),
       gain_pct: owner.acquisition_value ? (owner.gain_abs / owner.acquisition_value) * 100 : null,
     }))
     .sort((a, b) => (ownerOrder[a.owner_id] ?? 99) - (ownerOrder[b.owner_id] ?? 99));
@@ -620,9 +625,9 @@ function SlideshowOverlay({
                     </p>
                   </div>
                   <div className="slideshow-value-block">
-                    <div className="kpi-subtle">Totalt inklusive bankkonto</div>
-                    <div className="slideshow-value slideshow-total-value">{formatSek(portfolioTotalWithBank(activeSlide.owners))}</div>
-                    <div className="slideshow-total-subvalue">{formatThb(portfolioTotalWithBank(activeSlide.owners) * activeSlide.sekToThbRate)}</div>
+                    <div className="kpi-subtle">Totalt inklusive kontanter</div>
+                    <div className="slideshow-value slideshow-total-value">{formatSek(portfolioTotalWithCash(activeSlide.owners))}</div>
+                    <div className="slideshow-total-subvalue">{formatThb(portfolioTotalWithCash(activeSlide.owners) * activeSlide.sekToThbRate)}</div>
                     <div className="slideshow-total-rate">{formatSekToThbRate(activeSlide.sekToThbRate)}</div>
                   </div>
                 </div>
@@ -640,10 +645,15 @@ function SlideshowOverlay({
                         <h4 className="text-2xl font-semibold">{owner.owner_label}</h4>
                         <span className="badge">{owner.holding_count} innehav</span>
                       </div>
-                      <div className="mt-5 text-4xl font-semibold">{formatSek(owner.total_with_bank)}</div>
+                      <div className="mt-5 text-4xl font-semibold">{formatSek(owner.total_with_cash)}</div>
                       <div className="text-muted mt-2 text-base font-semibold">
                         Varav Bankkonto {formatSek(owner.bank_value)}
                       </div>
+                      {owner.available_for_purchase > 0 ? (
+                        <div className="text-muted mt-1 text-base font-semibold">
+                          Tillgängligt för köp {formatSek(owner.available_for_purchase)}
+                        </div>
+                      ) : null}
                       <div className="text-muted mt-5 grid max-w-md grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-base font-semibold">
                         <span>Nuvärde:</span>
                         <span>{formatSek(owner.current_value)}</span>
@@ -1212,7 +1222,7 @@ export function DashboardView({
                       <div className="text-sm font-semibold">{holding.name}</div>
                       <div className="text-xs kpi-subtle">{holding.instrument_type} • {holding.chart_label ?? holding.ticker ?? "Ingen graf"}</div>
                     </div>
-                    <span className="badge">{holding.has_chart ? "Graf" : "Värde"}</span>
+                    <span className="badge">{holding.is_provisional ? "Preliminär" : holding.has_chart ? "Graf" : "Värde"}</span>
                   </div>
                   <div className="mt-5 kpi-value">{formatSek(holding.current_value)}</div>
                   <div className={`mt-2 text-sm kpi-change ${changeToneClass(holding.gain_pct)}`}>
@@ -1242,7 +1252,7 @@ export function DashboardView({
                       {selectedPortfolioHolding.quantity.toLocaleString("sv-SE")} st/andelar • {selectedPortfolioHolding.chart_label ?? selectedPortfolioHolding.ticker ?? "ingen ticker"} • {selectedPortfolioHolding.instrument_type}
                     </p>
                   </div>
-                  <span className="badge">{selectedPortfolioHolding.has_chart ? "Graf" : "Endast värde"}</span>
+                  <span className="badge">{selectedPortfolioHolding.is_provisional ? "Preliminär order" : selectedPortfolioHolding.has_chart ? "Graf" : "Endast värde"}</span>
                 </div>
                 <div className="text-muted mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
                   <span>Nuvarande värde: <span className="text-strong font-semibold">{formatOwnerSekValues(selectedPortfolioHolding, "current_value")}</span></span>

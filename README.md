@@ -184,3 +184,5 @@ Lokal Avanza-import:
 - Det är bra om exporten överlappar tidigare importer; en års-export är normalt lagom. Importen använder checkpoint per ägare och ignorerar okända överlappsrader som ligger på eller före senaste importerade transaktionsdatum.
 - Undvik att ha både CSV och ODS för samma transaktionsperiod i samma ägarmapp. Om båda finns prioriteras ODS, vilket kan ge andra radvärden än original-CSV.
 - Position- och kontofiler kan fortfarande användas som startläge, men den löpande utvecklingen av innehav bör komma från transaktionsfilerna.
+- Likvida medel på investeringskontot kan redovisas separat som `available_for_purchase`; de räknas då med i ägarens totalsumma utan att märkas som bankkonto.
+- En manuellt registrerad pågående order kan märkas `is_provisional`. När nästa verkliga köp med samma ISIN importeras tas den provisoriska kvantiteten och anskaffningskostnaden bort innan transaktionen appliceras, så att innehavet inte dubbelräknas.

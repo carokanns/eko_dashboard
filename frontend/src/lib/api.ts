@@ -63,6 +63,7 @@ export type PortfolioAccountValue = {
   owner_label: string;
   total_value: number;
   bank_value: number;
+  available_for_purchase: number;
   account_count: number;
   source_file: string | null;
 };
@@ -111,6 +112,7 @@ export type PortfolioHolding = {
   valuation_fetched_at?: string | null;
   valuation_is_stale?: boolean;
   valuation_stale_reason?: string | null;
+  is_provisional?: boolean;
   levels?: PortfolioHoldingLevels | null;
   sparkline: SparkPoint[];
   owners: PortfolioOwnerValue[];

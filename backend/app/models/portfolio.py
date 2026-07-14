@@ -23,6 +23,7 @@ class PortfolioAccountValue(BaseModel):
     owner_label: str
     total_value: float
     bank_value: float
+    available_for_purchase: float = 0.0
     account_count: int
     source_file: Optional[str] = None
 
@@ -71,6 +72,7 @@ class PortfolioHolding(BaseModel):
     valuation_fetched_at: Optional[datetime] = None
     valuation_is_stale: bool = False
     valuation_stale_reason: Optional[str] = None
+    is_provisional: bool = False
     levels: Optional[PortfolioHoldingLevels] = None
     sparkline: list[SparkPoint] = Field(default_factory=list)
     owners: list[PortfolioOwnerValue] = Field(default_factory=list)

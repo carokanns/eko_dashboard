@@ -921,6 +921,7 @@ def _merge_portfolio_holdings(owner_holdings: list[tuple[str, str, PortfolioHold
                     "acquisition_value": acquisition_value,
                     "gain_abs": gain_abs,
                     "gain_pct": gain_pct,
+                    "is_provisional": any(item.is_provisional for _, _, item in items),
                     "owners": owners,
                 }
             )
@@ -953,6 +954,7 @@ def _empty_ledger_owner(owner_id: str, owner_label: str) -> dict[str, Any]:
         "owner_id": owner_id,
         "owner_label": owner_label,
         "bank_value": 0.0,
+        "available_for_purchase": 0.0,
         "holdings": {},
         "processed_transactions": {},
         "transaction_checkpoint": {
@@ -1020,6 +1022,7 @@ def _ledger_item_to_holding(item: dict[str, Any]) -> PortfolioHolding:
         chart_label=item.get("chart_label"),
         has_chart=bool(ticker),
         is_stale=not bool(ticker),
+        is_provisional=bool(item.get("is_provisional")),
     )
 
 
@@ -1151,6 +1154,17 @@ def _apply_transaction_to_ledger_owner(owner: dict[str, Any], row: dict[str, str
     current_acquisition = float(holding.get("acquisition_value") or 0.0)
 
     if transaction_type == "Köp":
+        if holding.get("is_provisional"):
+            current_quantity = max(0.0, current_quantity - float(holding.get("provisional_quantity") or 0.0))
+            current_acquisition = max(0.0, current_acquisition - float(holding.get("provisional_acquisition_value") or 0.0))
+            for key in (
+                "is_provisional",
+                "provisional_quantity",
+                "provisional_acquisition_value",
+                "provisional_created_date",
+                "provisional_source",
+            ):
+                holding.pop(key, None)
         holding["quantity"] = round(current_quantity + quantity, 6)
         holding["acquisition_value"] = round(current_acquisition + abs(amount), 2)
         if _parse_decimal(str(holding.get("current_price_sek") or "")) is None:
@@ -1443,13 +1457,16 @@ def _accounts_from_ledger_payload(base_dir: Path, ledger: dict[str, Any]) -> lis
     for owner_meta in portfolio_owner_dirs(base_dir):
         owner_id = owner_meta["owner_id"]
         owner = ledger.get("owners", {}).get(owner_id, _empty_ledger_owner(owner_id, owner_meta["owner_label"]))
+        bank_value = round(float(owner.get("bank_value") or 0.0), 2)
+        available_for_purchase = round(float(owner.get("available_for_purchase") or 0.0), 2)
         accounts.append(
             PortfolioAccountValue(
                 owner_id=owner_id,
                 owner_label=owner.get("owner_label") or owner_meta["owner_label"],
-                total_value=round(float(owner.get("bank_value") or 0.0), 2),
-                bank_value=round(float(owner.get("bank_value") or 0.0), 2),
-                account_count=1 if owner.get("bank_value") is not None else 0,
+                total_value=round(bank_value + available_for_purchase, 2),
+                bank_value=bank_value,
+                available_for_purchase=available_for_purchase,
+                account_count=(1 if owner.get("bank_value") is not None else 0) + (1 if available_for_purchase else 0),
                 source_file="portfolio-ledger.json",
             )
         )

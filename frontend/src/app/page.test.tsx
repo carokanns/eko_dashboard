@@ -253,6 +253,7 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
         y1_pct: null,
         timestamp_local: null,
         is_stale: true,
+        is_provisional: true,
         levels: {
           target_price: 140,
           stop_price: 120,
@@ -297,6 +298,7 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
         owner_label: "JP",
         total_value: 3234.5,
         bank_value: 1234.5,
+        available_for_purchase: 0,
         account_count: 2,
         source_file: "2026-06-11_konto.csv",
       },
@@ -305,6 +307,7 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
         owner_label: "Pat",
         total_value: 2500,
         bank_value: 2000,
+        available_for_purchase: 500,
         account_count: 2,
         source_file: "2026-06-11_konto.csv",
       },
@@ -343,6 +346,7 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
   expect(screen.getByText("1 751 kr")).toBeInTheDocument();
   expect(screen.getByTestId("portfolio-card-se0000000001")).toBeInTheDocument();
   expect(screen.getByTestId("portfolio-card-se0000000002")).toBeInTheDocument();
+  expect(within(screen.getByTestId("portfolio-card-se0000000002")).getByText("Preliminär")).toBeInTheDocument();
   expect(within(screen.getByTestId("portfolio-card-se0000000001")).getByText("Mål 145 SEK (-3.33%)")).toHaveClass("change-positive");
   expect(within(screen.getByTestId("portfolio-card-se0000000001")).getByText("Stopp 120 SEK (+20.00%)")).toBeInTheDocument();
   expect(within(screen.getByTestId("portfolio-card-se0000000002")).getByText("Stopp 120 SEK (-20.00%)")).toHaveClass("change-negative");
@@ -357,18 +361,19 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
   fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
   fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
   expect(within(overlay).getByRole("heading", { name: "Min Avanza" })).toBeInTheDocument();
-  expect(within(overlay).getByText("Totalt inklusive bankkonto")).toBeInTheDocument();
+  expect(within(overlay).getByText("Totalt inklusive kontanter")).toBeInTheDocument();
   expect(within(overlay).getByText("JP")).toBeInTheDocument();
   expect(within(overlay).getByText("Pat")).toBeInTheDocument();
   expect(within(overlay).getByText("Inköpsvärde 1 200 kr (+45.88%)")).toBeInTheDocument();
   expect(within(overlay).getByText("Totalt innehav")).toBeInTheDocument();
-  expect(within(overlay).getByText("4 985 kr")).toBeInTheDocument();
-  expect(within(overlay).getByText("17 448 THB")).toBeInTheDocument();
+  expect(within(overlay).getByText("5 485 kr")).toBeInTheDocument();
+  expect(within(overlay).getByText("19 198 THB")).toBeInTheDocument();
   expect(within(overlay).getByText("1 SEK = 3,50 THB")).toBeInTheDocument();
   expect(within(overlay).getByText("Varav Bankkonto 1 235 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("Varav Bankkonto 2 000 kr")).toBeInTheDocument();
+  expect(within(overlay).getByText("Tillgängligt för köp 500 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("2 485 kr")).toBeInTheDocument();
-  expect(within(overlay).getByText("2 500 kr")).toBeInTheDocument();
+  expect(within(overlay).getByText("3 000 kr")).toBeInTheDocument();
   expect(within(overlay).getAllByText("Nuvärde:")).toHaveLength(2);
   expect(within(overlay).getAllByText("Inköpsvärde:")).toHaveLength(2);
   expect(within(overlay).getAllByText("Resultat:")).toHaveLength(2);

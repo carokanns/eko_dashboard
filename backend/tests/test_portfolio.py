@@ -800,6 +800,60 @@ def test_ledger_applies_new_bank_transaction_after_seed(tmp_path):
     assert accounts[0].bank_value == 1025
 
 
+def test_ledger_accounts_include_available_for_purchase(tmp_path):
+    data_dir = _write_single_position(tmp_path, "JP_avanza")
+    _write_account_summary(data_dir, bank_value="1234,00", isk_value="10000,00")
+    _write_transactions(data_dir, rows=[])
+    update_portfolio_ledger_from_transactions(tmp_path)
+    ledger_path = portfolio_ledger_path(tmp_path)
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    ledger["owners"]["jp"]["available_for_purchase"] = 500
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+    account = load_portfolio_accounts_from_ledger(tmp_path)[0]
+
+    assert account.bank_value == 1234
+    assert account.available_for_purchase == 500
+    assert account.total_value == 1734
+
+
+def test_real_buy_replaces_matching_provisional_order(tmp_path):
+    data_dir = _write_single_position(tmp_path, "JP_avanza", quantity="10", current_value="1500,00", acquisition_price="100,00")
+    _write_transactions(data_dir, rows=[])
+    update_portfolio_ledger_from_transactions(tmp_path)
+    ledger_path = portfolio_ledger_path(tmp_path)
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    holding = ledger["owners"]["jp"]["holdings"]["isin:se0000000001"]
+    holding.update(
+        {
+            "quantity": 12,
+            "acquisition_value": 1200,
+            "is_provisional": True,
+            "provisional_quantity": 2,
+            "provisional_acquisition_value": 200,
+            "provisional_created_date": "2026-06-17",
+            "provisional_source": "manual_test",
+        }
+    )
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+    _write_transactions(
+        data_dir,
+        rows=[
+            "2026-06-18;Bas ISK;Köp;Exempelbolag B;1;120;-120;SEK;;;SEK;SE0000000001;",
+        ],
+    )
+
+    update = update_portfolio_ledger_from_transactions(tmp_path)
+    refreshed = load_portfolio_holdings_from_ledger(tmp_path)[0]
+    saved = json.loads(ledger_path.read_text(encoding="utf-8"))["owners"]["jp"]["holdings"]["isin:se0000000001"]
+
+    assert update["applied_count"] == 1
+    assert refreshed.quantity == 11
+    assert refreshed.acquisition_value == 1120
+    assert refreshed.is_provisional is False
+    assert "provisional_quantity" not in saved
+
+
 def test_market_enrichment_converts_usd_stock_value_to_sek(tmp_path, monkeypatch):
     data_dir = _write_single_position(
         tmp_path,
