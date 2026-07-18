@@ -9,6 +9,7 @@ import {
   formatLevelPrice,
   formatPercent,
   formatSek,
+  formatSignedSek,
   formatSekToThbRate,
   formatThb,
   formatTimestampCell,
@@ -54,6 +55,7 @@ type PortfolioOwnerSummary = {
   available_for_purchase: number;
   total_with_cash: number;
   holding_count: number;
+  day_abs: number | null;
 };
 type SlideshowSlide =
   | {
@@ -212,6 +214,15 @@ function formatSlideshowOwnerLine(holding: PortfolioHolding): string | null {
   return holding.owners[0]?.owner_label ?? null;
 }
 
+export function calculateOwnerDayDevelopmentSek(
+  dayAbs: number | null,
+  last: number | null,
+  ownerCurrentValue: number,
+): number | null {
+  if (dayAbs === null || last === null || last === 0) return null;
+  return dayAbs * (ownerCurrentValue / last);
+}
+
 function buildPortfolioOwnerSummaries(items: PortfolioHolding[], accounts: PortfolioAccountValue[]): PortfolioOwnerSummary[] {
   const summaries = new Map<string, PortfolioOwnerSummary>();
   for (const holding of items) {
@@ -227,10 +238,15 @@ function buildPortfolioOwnerSummaries(items: PortfolioHolding[], accounts: Portf
         available_for_purchase: 0,
         total_with_cash: 0,
         holding_count: 0,
+        day_abs: 0,
       };
       current.current_value += owner.current_value;
       current.acquisition_value += owner.acquisition_value ?? 0;
       current.gain_abs += owner.gain_abs ?? 0;
+      const ownerDayAbs = calculateOwnerDayDevelopmentSek(holding.day_abs, holding.last, owner.current_value);
+      if (ownerDayAbs !== null) {
+        current.day_abs = (current.day_abs ?? 0) + ownerDayAbs;
+      }
       current.holding_count += 1;
       summaries.set(owner.owner_id, current);
     }
@@ -248,6 +264,7 @@ function buildPortfolioOwnerSummaries(items: PortfolioHolding[], accounts: Portf
       available_for_purchase: 0,
       total_with_cash: 0,
       holding_count: 0,
+      day_abs: 0,
     };
     current.bank_value = account.bank_value;
     current.available_for_purchase = account.available_for_purchase;
@@ -264,6 +281,7 @@ function buildPortfolioOwnerSummaries(items: PortfolioHolding[], accounts: Portf
       bank_value: Math.round(owner.bank_value),
       available_for_purchase: Math.round(owner.available_for_purchase),
       total_with_cash: Math.round(owner.current_value + owner.bank_value + owner.available_for_purchase),
+      day_abs: owner.day_abs === null ? null : Math.round(owner.day_abs),
       gain_pct: owner.acquisition_value ? (owner.gain_abs / owner.acquisition_value) * 100 : null,
     }))
     .sort((a, b) => (ownerOrder[a.owner_id] ?? 99) - (ownerOrder[b.owner_id] ?? 99));
@@ -662,6 +680,9 @@ function SlideshowOverlay({
                         <span className={changeToneClass(owner.gain_pct)}>
                           {formatSek(owner.gain_abs)} ({formatPercent(owner.gain_pct)})
                         </span>
+                      </div>
+                      <div className={`mt-5 text-base font-semibold ${changeToneClass(owner.day_abs)}`}>
+                        Utv. idag {formatSignedSek(owner.day_abs)}
                       </div>
                     </div>
                   ))}

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 
-import { DashboardView } from "./dashboard-view";
+import { calculateOwnerDayDevelopmentSek, DashboardView } from "./dashboard-view";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -45,6 +45,13 @@ function buildSummary(overrides?: Partial<(typeof summary)["meta"]>) {
     },
   };
 }
+
+test("calculates owner development from the same one-day movement as the holding", () => {
+  const dnbDayAbs = 178.0744 - 178.73756;
+  const patCurrentValue = 211751.25;
+
+  expect(calculateOwnerDayDevelopmentSek(dnbDayAbs, 178.0744, patCurrentValue)).toBeCloseTo(-788.57, 2);
+});
 
 test("renders dashboard with live values", () => {
   render(
@@ -371,6 +378,8 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
   expect(within(overlay).getByText("1 SEK = 3,50 THB")).toBeInTheDocument();
   expect(within(overlay).getByText("Varav Bankkonto 1 235 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("Varav Bankkonto 2 000 kr")).toBeInTheDocument();
+  expect(within(overlay).getByText("Utv. idag +7 kr")).toBeInTheDocument();
+  expect(within(overlay).getByText("Utv. idag +3 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("Tillgängligt för köp 500 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("2 485 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("3 000 kr")).toBeInTheDocument();
@@ -409,6 +418,7 @@ test("keeps JP and Pat ownership separate for SEB AI in the slideshow", () => {
         acquisition_value: 10750,
         gain_abs: 1.01,
         gain_pct: 0.01,
+        day_abs: 0,
         ticker: null,
         chart_source: null,
         chart_label: null,
@@ -477,8 +487,10 @@ test("keeps JP and Pat ownership separate for SEB AI in the slideshow", () => {
   expect(within(jpCard as HTMLElement).getByText("1 innehav")).toBeInTheDocument();
   expect(within(jpCard as HTMLElement).getByText("851 kr")).toBeInTheDocument();
   expect(within(jpCard as HTMLElement).getByText("750 kr")).toBeInTheDocument();
+  expect(within(jpCard as HTMLElement).getByText("Utv. idag 0 kr")).toBeInTheDocument();
   expect(within(patCard as HTMLElement).getByText("1 innehav")).toBeInTheDocument();
   expect(within(patCard as HTMLElement).getByText("10 500 kr")).toBeInTheDocument();
+  expect(within(patCard as HTMLElement).getByText("Utv. idag 0 kr")).toBeInTheDocument();
   expect(within(patCard as HTMLElement).getAllByText("10 000 kr")).toHaveLength(2);
   expect(within(overlay).getByText("11 351 kr")).toBeInTheDocument();
 });

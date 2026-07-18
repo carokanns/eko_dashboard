@@ -11,6 +11,12 @@ export function formatSek(value: number | null, precision = 0): string {
   })} kr`;
 }
 
+export function formatSignedSek(value: number | null): string {
+  if (value === null) return "--";
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${sign}${formatSek(Math.abs(value))}`;
+}
+
 export function formatThb(value: number | null): string {
   if (value === null) return "--";
   return `${value.toLocaleString("sv-SE", {
