@@ -180,17 +180,18 @@ function PortfolioLevelsLine({ holding, compact = false, align = "left" }: { hol
   return (
     <div className={`text-muted flex flex-wrap gap-x-3 gap-y-1 ${align === "right" ? "justify-end text-right" : ""} ${compact ? "mt-3 text-xs" : "mt-2 text-sm"}`}>
       {prefix ? <span>{prefix}</span> : null}
-      <span>Nu {formatLevelPrice(levels.current_price, currency)}</span>
+      <span className={changeToneClass(holding.day_pct)}>
+        Nu {formatLevelPrice(levels.current_price, currency)}
+        {holding.day_pct !== null ? ` (${formatPercent(holding.day_pct)})` : ""}
+      </span>
       {levels.target_price !== null ? (
         <span className={targetReached ? "change-positive" : undefined}>
           Mål {formatLevelPrice(levels.target_price, currency)}
-          {levels.target_distance_pct !== null ? ` (${formatPercent(levels.target_distance_pct)})` : ""}
         </span>
       ) : null}
       {levels.stop_price !== null ? (
         <span className={stopReached ? "change-negative" : undefined}>
           Stopp {formatLevelPrice(levels.stop_price, currency)}
-          {levels.stop_distance_pct !== null ? ` (${formatPercent(levels.stop_distance_pct)})` : ""}
         </span>
       ) : null}
     </div>

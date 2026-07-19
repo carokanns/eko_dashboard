@@ -354,14 +354,14 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
   expect(screen.getByTestId("portfolio-card-se0000000001")).toBeInTheDocument();
   expect(screen.getByTestId("portfolio-card-se0000000002")).toBeInTheDocument();
   expect(within(screen.getByTestId("portfolio-card-se0000000002")).getByText("Preliminär")).toBeInTheDocument();
-  expect(within(screen.getByTestId("portfolio-card-se0000000001")).getByText("Mål 145 SEK (-3.33%)")).toHaveClass("change-positive");
-  expect(within(screen.getByTestId("portfolio-card-se0000000001")).getByText("Stopp 120 SEK (+20.00%)")).toBeInTheDocument();
-  expect(within(screen.getByTestId("portfolio-card-se0000000002")).getByText("Stopp 120 SEK (-20.00%)")).toHaveClass("change-negative");
+  expect(within(screen.getByTestId("portfolio-card-se0000000001")).getByText("Mål 145 SEK")).toHaveClass("change-positive");
+  expect(within(screen.getByTestId("portfolio-card-se0000000001")).getByText("Stopp 120 SEK")).toBeInTheDocument();
+  expect(within(screen.getByTestId("portfolio-card-se0000000002")).getByText("Stopp 120 SEK")).toHaveClass("change-negative");
   expect(screen.getByTestId("selected-portfolio-chart-panel")).toBeInTheDocument();
   expect(screen.getByText("Nuvarande värde:")).toBeInTheDocument();
   expect(screen.getByText("1 001 kr, 500 kr")).toBeInTheDocument();
   expect(screen.getByText("800 kr (+25.06%), 200 kr (+150.00%)")).toBeInTheDocument();
-  expect(within(screen.getByTestId("selected-portfolio-chart-panel")).getByText("Nu 150 SEK")).toBeInTheDocument();
+  expect(within(screen.getByTestId("selected-portfolio-chart-panel")).getByText("Nu 150 SEK (+0.67%)")).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: "Bildspel" }));
   const overlay = screen.getByTestId("slideshow-overlay");
@@ -391,7 +391,7 @@ test("shows Min Avanza tab with portfolio cards and value text when enabled", ()
   expect(within(overlay).getByText("1 001 kr, 500 kr")).toBeInTheDocument();
   expect(within(overlay).getByText("Inköpsvärde 1 000 kr (+50.05%)")).toBeInTheDocument();
   expect(within(overlay).getByText("800 kr (+25.06%), 200 kr (+150.00%)")).toBeInTheDocument();
-  expect(within(overlay).getByText("Mål 145 SEK (-3.33%)")).toHaveClass("change-positive");
+  expect(within(overlay).getByText("Mål 145 SEK")).toHaveClass("change-positive");
   fireEvent.click(within(overlay).getByRole("button", { name: "Nästa" }));
   expect(within(overlay).getByRole("heading", { name: "Exempelfond" })).toBeInTheDocument();
   expect(within(overlay).getByText("JP")).toBeInTheDocument();
